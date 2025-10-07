@@ -148,6 +148,7 @@ class TestMemoryStore:
 
         # Try to access the shared memory - should fail
         from multiprocessing import shared_memory
+
         with pytest.raises(FileNotFoundError):
             shm = shared_memory.SharedMemory(name=shm_name)
             shm.close()
