@@ -52,9 +52,13 @@ def is_external_cell_id(cell_id: CellId_t) -> bool:
     """
 
     # UUIDs are 36 characters long, including hyphens
-    uuid_to_test = str(cell_id)[:36]
+    uuid_to_test = str(cell_id)
+    if len(uuid_to_test) < 36:
+        return False
+    uuid_to_test = uuid_to_test[:36]
     try:
-        uuid_obj = UUID(uuid_to_test, version=4)
+        return UUID(uuid_to_test, version=4).hex == uuid_to_test.replace(
+            "-", ""
+        )
     except ValueError:
         return False
-    return str(uuid_obj) == uuid_to_test
