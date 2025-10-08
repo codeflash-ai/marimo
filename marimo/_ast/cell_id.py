@@ -11,6 +11,8 @@ class CellIdGenerator:
         self.prefix = prefix
         self.random_seed = random.Random(42)
         self.seen_ids: set[CellId_t] = set()
+        # Precompute ascii_letters as a tuple for faster .choices
+        self._ascii_letters_tuple = tuple(string.ascii_letters)
 
     def create_cell_id(self) -> CellId_t:
         """Create a new unique cell ID.
@@ -18,15 +20,24 @@ class CellIdGenerator:
         Returns:
             CellId_t: A new cell ID consisting of the manager's prefix followed by 4 random letters.
         """
+        # For performance: localize hot attributes
+        random_seed = self.random_seed
+        prefix = self.prefix
+        ascii_letters_tuple = self._ascii_letters_tuple
+        seen_ids = self.seen_ids
+        CellId_t_local = CellId_t
+
         attempts = 0
         while attempts < 100:
-            # 4 random letters
-            _id = self.prefix + "".join(
-                self.random_seed.choices(string.ascii_letters, k=4)
+            # 4 random letters (use tuple for slightly faster access)
+            _id = prefix + "".join(
+                random_seed.choices(ascii_letters_tuple, k=4)
             )
-            if _id not in self.seen_ids:
-                self.seen_ids.add(CellId_t(_id))
-                return CellId_t(_id)
+            cell_id = CellId_t_local(_id)
+            # Avoid repeated conversion by computing cell_id once
+            if cell_id not in seen_ids:
+                seen_ids.add(cell_id)
+                return cell_id
             attempts += 1
 
         raise ValueError(
