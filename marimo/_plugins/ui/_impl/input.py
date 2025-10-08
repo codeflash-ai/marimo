@@ -562,12 +562,20 @@ class range_slider(UIElement[list[Numeric], Sequence[Numeric]]):
         return range_slider(start=start, stop=stop, label=label, **kwargs)
 
     def _convert_value(self, value: list[Numeric]) -> Sequence[Numeric]:
-        if self._mapping is not None:
-            return cast(
-                Sequence[Numeric],
-                [self._dtype(self._mapping[int(v)]) for v in value],
-            )
-        return cast(Sequence[Numeric], [self._dtype(v) for v in value])
+        mapping = self._mapping
+        dtype = self._dtype
+        if mapping is not None:
+            # Inlined loop for performance: avoid list comprehensions and extra lookups
+            mapping_get = mapping.__getitem__  # method alias for speed
+            int_cast = int  # localize for perf
+            out = []
+            for v in value:
+                mv = mapping_get(int_cast(v))
+                out.append(dtype(mv))
+            return cast(Sequence["Numeric"], out)
+        else:
+            dtype_local = dtype  # localize for speed
+            return cast(Sequence["Numeric"], [dtype_local(v) for v in value])
 
 
 def _infer_dtype(
