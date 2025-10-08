@@ -56,7 +56,8 @@ def unmangle_local(
 
 
 def is_mangled_local(name: str, cell_id: CellId_t = _EMPTY_CELL_ID) -> bool:
-    return name.startswith(f"_cell_{cell_id}")
+    prefix = "_cell_" + str(cell_id)
+    return name.startswith(prefix)
 
 
 def is_local(name: str) -> bool:
