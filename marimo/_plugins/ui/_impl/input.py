@@ -576,9 +576,10 @@ def _infer_dtype(
     """Infer the dtype of a sequence of numbers."""
     for item in items:
         if isinstance(item, Sequence):
-            if any(isinstance(subitem, float) for subitem in item):
-                return float
-        if any(isinstance(item, float) for item in items):
+            for subitem in item:
+                if isinstance(subitem, float):
+                    return float
+        elif isinstance(item, float):
             return float
     return int
 
