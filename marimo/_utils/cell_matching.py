@@ -48,11 +48,19 @@ def extract_order(
     codes: list[str], lookup: dict[str, list[tuple[int, CellId_t]]]
 ) -> list[list[int]]:
     offset = 0
-    order: list[list[int]] = [[]] * len(codes)
+    # Avoid list multiplication which results in shared references
+    order: list[list[int]] = [None] * len(codes)  # type: ignore
     for i, code in enumerate(codes):
         dupes = len(lookup[code])
-        order[i] = [offset + j for j in range(dupes)]
-        offset += dupes
+        if dupes > 0:
+            # Use range arithmetic for efficiency
+            start = offset
+            end = offset + dupes
+            # Use list(range(...)) is faster than a list comprehension for iteration ranges
+            order[i] = list(range(start, end))
+            offset = end
+        else:
+            order[i] = []
     return order
 
 
