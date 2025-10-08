@@ -1118,22 +1118,27 @@ class multiselect(UIElement[list[str], list[object]]):
         full_width: bool = False,
         max_selections: Optional[int] = None,
     ) -> None:
-        if len(options) > multiselect._MAX_OPTIONS:
+        options_is_dict = isinstance(options, dict)
+        options_len = len(options)
+        if options_len > multiselect._MAX_OPTIONS:
             raise ValueError(
                 "The maximum number of options allowed "
                 f"is {multiselect._MAX_OPTIONS}, but your multiselect has "
-                f"{len(options)} options. "
+                f"{options_len} options. "
                 "If you really want to expose that many options, consider "
                 "using `mo.ui.text()` to let the user type an option name, "
                 "and `mo.ui.table()` to present the options matching the "
                 "user's query.",
             )
 
-        if not isinstance(options, dict):
-            options = {_to_option_name(option): option for option in options}
+        # Optimize option mapping: only build dict if needed
+        if not options_is_dict:
+            _to_name = _to_option_name  # localize for speed
+            options = {_to_name(option): option for option in options}
 
             if value is not None and not isinstance(value, str):
-                value = [_to_option_name(v) for v in value]
+                # Minor optimization: use list comprehension only if value isn't str
+                value = [_to_name(v) for v in value]
 
         self.options = options
         initial_value = list(value) if value is not None else []
@@ -1146,12 +1151,15 @@ class multiselect(UIElement[list[str], list[object]]):
                     "Initial value cannot be greater than max_selections."
                 )
 
+        # Avoid recomputing keys
+        options_keys = list(self.options.keys())
+
         super().__init__(
             component_name=multiselect._name,
             initial_value=initial_value,
             label=label,
             args={
-                "options": list(self.options.keys()),
+                "options": options_keys,
                 "full-width": full_width,
                 "max-selections": max_selections,
             },
@@ -1167,7 +1175,10 @@ class multiselect(UIElement[list[str], list[object]]):
         return multiselect(options=options, label=label, **kwargs)
 
     def _convert_value(self, value: list[str]) -> list[object]:
-        return [self.options[v] for v in value]
+        # Optimized by localizing attribute for inner loop tightness.
+        options = self.options
+        # CPython dict lookup is fast, but local var is faster than attr lookup in loop
+        return [options[v] for v in value]
 
 
 @mddoc
