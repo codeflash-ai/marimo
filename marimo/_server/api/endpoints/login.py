@@ -99,7 +99,8 @@ async def login_submit(request: Request) -> Response:
                     schema:
                         type: string
     """
-    base_url = AppState(request).base_url or "/"
+    state = AppState(request)
+    base_url = state.base_url or "/"
     base_url = _with_trailing_slash(base_url)
 
     error = ""
@@ -127,8 +128,7 @@ async def login_submit(request: Request) -> Response:
     elif request.user.is_authenticated:
         return RedirectResponse(redirect_url, 302)
 
-    base_url = AppState(request).base_url
-    html = LOGIN_PAGE.format(error=error, base_url=base_url)
+    html = LOGIN_PAGE.format(error=error, base_url=state.base_url)
     return HTMLResponse(
         content=html,
         headers={
