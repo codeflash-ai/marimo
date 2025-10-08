@@ -7,10 +7,10 @@ from typing import Any
 
 
 def is_callable_method(obj: Any, attr: str) -> bool:
-    if not hasattr(obj, attr):
+    # Avoid double attribute lookup by using getattr with default
+    method = getattr(obj, attr, None)
+    if method is None:
         return False
-
-    method = getattr(obj, attr)
-    if inspect.isclass(obj) and not isinstance(method, (types.MethodType)):
+    if inspect.isclass(obj) and not isinstance(method, types.MethodType):
         return False
     return callable(method)
