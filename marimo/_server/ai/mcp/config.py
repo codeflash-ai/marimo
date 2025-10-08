@@ -63,7 +63,12 @@ def is_mcp_config_empty(config: MCPConfig | None) -> bool:
     """Check if the MCP configuration is empty."""
     if config is None:
         return True
-    return not config.get("mcpServers") and not config.get("presets")
+    # Use direct key lookup with .get and short-circuit evaluation for early return
+    mcp_servers = config.get("mcpServers")
+    if mcp_servers:
+        return False
+    presets = config.get("presets")
+    return not presets
 
 
 @dataclass
