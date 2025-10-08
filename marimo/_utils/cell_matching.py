@@ -91,63 +91,80 @@ def _hungarian_algorithm(scores: list[list[float]]) -> list[int]:
 
     # Step 1: Subtract row minima
     for i in range(n):
-        min_value = min(score_matrix[i])
-        for j in range(n):
-            score_matrix[i][j] -= min_value
+        row = score_matrix[i]
+        min_value = min(row)
+        if min_value != 0:
+            for j in range(n):
+                row[j] -= min_value
 
     # Step 2: Subtract column minima
     for j in range(n):
         min_value = min(score_matrix[i][j] for i in range(n))
-        for i in range(n):
-            score_matrix[i][j] -= min_value
+        if min_value != 0:
+            for i in range(n):
+                score_matrix[i][j] -= min_value
 
     # Step 3: Find initial assignment
     row_assignment = [-1] * n
     col_assignment = [-1] * n
 
-    # Find independent zeros
+    # Find independent zeros (speed up by tracking covered rows/cols)
     for i in range(n):
+        row = score_matrix[i]
         for j in range(n):
             if (
-                score_matrix[i][j] == 0
+                row[j] == 0
                 and row_assignment[i] == -1
                 and col_assignment[j] == -1
             ):
                 row_assignment[i] = j
                 col_assignment[j] = i
+                break  # Each row can only be assigned once
 
     # Step 4: Improve assignment iteratively
     while True:
-        assigned_count = sum(1 for x in row_assignment if x != -1)
+        assigned_count = 0
+        for x in row_assignment:
+            assigned_count += x != -1
         if assigned_count == n:
             break
 
+        # Compute uncovered rows/cols
+        uncovered_rows = [i for i in range(n) if row_assignment[i] == -1]
+        uncovered_cols = [j for j in range(n) if col_assignment[j] == -1]
+
         # Find minimum uncovered value
         min_uncovered = float("inf")
-        for i in range(n):
-            for j in range(n):
-                if row_assignment[i] == -1 and col_assignment[j] == -1:
-                    min_uncovered = min(min_uncovered, score_matrix[i][j])
+        for i in uncovered_rows:
+            row = score_matrix[i]
+            for j in uncovered_cols:
+                v = row[j]
+                if v < min_uncovered:
+                    min_uncovered = v
 
         if min_uncovered == float("inf"):
             break
 
         # Update matrix
+        # Only loop over relevant entries
+        for i in uncovered_rows:
+            row = score_matrix[i]
+            for j in uncovered_cols:
+                row[j] -= min_uncovered
         for i in range(n):
-            for j in range(n):
-                if row_assignment[i] == -1 and col_assignment[j] == -1:
-                    score_matrix[i][j] -= min_uncovered
-                elif row_assignment[i] != -1 and col_assignment[j] != -1:
+            if row_assignment[i] != -1:
+                j = row_assignment[i]
+                if col_assignment[j] != -1:
                     score_matrix[i][j] += min_uncovered
 
-        # Try to find new assignments
-        for i in range(n):
-            if row_assignment[i] == -1:
-                for j in range(n):
-                    if score_matrix[i][j] == 0 and col_assignment[j] == -1:
-                        row_assignment[i] = j
-                        col_assignment[j] = i
-                        break
+        # Try to find new assignments for previously unassigned rows
+        for i in uncovered_rows:
+            row = score_matrix[i]
+            for j in uncovered_cols:
+                if row[j] == 0 and col_assignment[j] == -1:
+                    row_assignment[i] = j
+                    col_assignment[j] = i
+                    break
 
     # Convert to result format
     result = [-1] * n
