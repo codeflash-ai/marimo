@@ -1005,11 +1005,13 @@ class dropdown(UIElement[list[str], Any]):
             searchable = True
 
         if not isinstance(options, dict):
+            # Use dict comprehension locally, as in original
             options = {_to_option_name(option): option for option in options}
 
             if value is not None and not isinstance(value, str):
                 value = _to_option_name(value)
 
+        # Avoid .options.keys() conversion on repeated use, so precompute as list once
         if self._RESERVED_OPTION in options:
             raise ValueError(
                 f"The option name '{self._RESERVED_OPTION}' "
@@ -1017,6 +1019,8 @@ class dropdown(UIElement[list[str], Any]):
             )
 
         self.options = options
+        # Precompute keys for use in args, avoiding repeated list() computation
+        self._options_keys = list(self.options.keys())
         initial_value = [value] if value is not None else []
         if allow_select_none is None:
             allow_select_none = value is None
@@ -1031,7 +1035,7 @@ class dropdown(UIElement[list[str], Any]):
             initial_value=initial_value,
             label=label,
             args={
-                "options": list(self.options.keys()),
+                "options": self._options_keys,
                 "allow-select-none": allow_select_none,
                 "searchable": searchable,
                 "full-width": full_width,
@@ -1048,17 +1052,21 @@ class dropdown(UIElement[list[str], Any]):
         return dropdown(options=options, label=label, **kwargs)
 
     def _convert_value(self, value: list[str]) -> Any:
+        # Hot path: avoid attribute/key lookups and intermediates; use locals
         if value:
             assert len(value) == 1, "Dropdowns only support a single value"
-            self._selected_key = value[0]
-            if self._selected_key not in self.options:
+            selected_key = value[0]
+            self._selected_key = selected_key
+            opts = self.options
+            if selected_key not in opts:
+                # Use precomputed self._options_keys for list repr
                 raise ValueError(
-                    f"The option name '{self._selected_key}' "
+                    f"The option name '{selected_key}' "
                     "is not a valid option. "
                     "Please use one of the following options: "
-                    f"{list(self.options.keys())}"
+                    f"{self._options_keys}"
                 )
-            return self.options[value[0]]
+            return opts[selected_key]
         else:
             self._selected_key = None
             return None
