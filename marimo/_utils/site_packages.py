@@ -59,7 +59,14 @@ def module_exists_in_site_packages(module_name: str) -> bool:
         # Get all site-packages directories
         site_packages_dirs = site.getsitepackages()
         if hasattr(site, "getusersitepackages"):
-            site_packages_dirs.append(site.getusersitepackages())
+            # Avoid repeated call to getusersitepackages()
+            user_site = site.getusersitepackages()
+            # Prevent duplicates just in case
+            if user_site not in site_packages_dirs:
+                site_packages_dirs.append(user_site)
+
+        # Pre-compute the suffixes used below to avoid repeated computation
+        suffixes = (".egg-info", ".dist-info", ".egg")
 
         for site_dir in site_packages_dirs:
             if not os.path.exists(site_dir):
@@ -75,18 +82,23 @@ def module_exists_in_site_packages(module_name: str) -> bool:
             if os.path.isfile(py_file):
                 return True
 
-            # Check for .pth files or other package indicators
-            for entry in os.listdir(site_dir):
-                module = entry.split("-", 1)[0]
-                if module == module_name and (
-                    entry.endswith(".egg-info")
-                    or entry.endswith(".dist-info")
-                    or entry.endswith(".egg")
-                ):
-                    return True
+            # Optimize os.listdir() by extracting matching entries in a single scan
+            try:
+                entries = os.listdir(site_dir)
+            except OSError:
+                continue
 
-    except Exception:
+            prefix = module_name + "-"
+            plen = len(prefix)
+            for entry in entries:
+                # Fast path: entry must start with 'module_name-'
+                if entry.startswith(prefix):
+                    # Only check suffix if prefix matches
+                    if entry.endswith(suffixes):
+                        return True
+
         # If we can't check site-packages, assume it might exist
+    except Exception:
         return False
 
     return False
