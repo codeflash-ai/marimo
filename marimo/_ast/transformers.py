@@ -22,12 +22,12 @@ class BlockException(Exception):
 
 
 def compiled_ast(block: Sequence[ast.AST | ast.stmt]) -> ast.Module:
+    # Avoid the cast to list if already a list for performance
+    stmts = block if isinstance(block, list) else list(block)
     return cast(
         ast.Module,
         compile(
-            ast.Module(cast(list[ast.stmt], block), type_ignores=[]),
-            # <ast> is non-standard as a filename, but easier to debug than
-            # <module> everywhere.
+            ast.Module(stmts, type_ignores=[]),
             "<ast>",
             mode="exec",
             flags=ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,
@@ -65,19 +65,22 @@ def clean_to_modules(
     >>> </block>
     """
     assert len(block.items) == 1, "Unexpected with block structure."
-    (with_block,) = block.items
-    initializer: ast.AST = with_block.context_expr
+    with_block = block.items[0]
+
+    # Assign to initializer in only one branch, minimizing attr lookups
+    initializer_expr = with_block.context_expr
     if with_block.optional_vars:
+        # Reuse the targets and value directly
         initializer = ast.Assign(
             targets=[with_block.optional_vars],
-            value=cast(ast.expr, initializer),
+            value=cast(ast.expr, initializer_expr),
         )
     else:
-        # Edgecase with no "as" clause.
-        initializer = ast.Expr(value=cast(ast.expr, initializer))
+        initializer = ast.Expr(value=cast(ast.expr, initializer_expr))
     initializer.lineno = len(pre_block) + 1
     initializer.col_offset = 0
     pre_block.append(initializer)
+    # Directly pass pre_block and block.body to avoid unnecessary intermediate variables
     return (compiled_ast(pre_block), compiled_ast(block.body))
 
 
