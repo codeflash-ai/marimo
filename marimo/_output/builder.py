@@ -153,20 +153,19 @@ class _HTMLBuilder:
     def figure(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
+        # Avoid list creation when children is already a list
+        if isinstance(children, str):
+            children_html = children
+        else:
+            # "".join() is already optimal for str list concatenation
+            children_html = "".join(children)
 
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
+        if style is None or style == "":
+            # No attributes, short circuit
             return f"<figure>{children_html}</figure>"
         else:
-            return f"<figure {_join_params(params)}>{children_html}</figure>"
+            # Only one style attr, avoid list and function call overhead
+            return f"<figure style='{style}'>{children_html}</figure>"
 
     @staticmethod
     def figcaption(
