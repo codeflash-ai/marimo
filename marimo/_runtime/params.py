@@ -45,6 +45,7 @@ class QueryParams(State[SerializedQueryParams]):
         super().__init__(params, _registry=_registry)
         self._params = params
         self._stream = stream
+        self._params_len = len(params)
 
     T = TypeVar("T", str, list[str])
 
@@ -87,7 +88,7 @@ class QueryParams(State[SerializedQueryParams]):
         return key in self._params
 
     def __len__(self) -> int:
-        return len(self._params)
+        return self._params_len
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._params)
