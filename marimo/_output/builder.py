@@ -286,20 +286,16 @@ class _HTMLBuilder:
     def td(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
+        # Avoid always building params list; inline for small case savings
         resolved_children = (
             [children] if isinstance(children, str) else children
         )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
         children_html = "".join(resolved_children)
 
-        if len(params) == 0:
+        if not style:
             return f"<td>{children_html}</td>"
-        else:
-            return f"<td {_join_params(params)}>{children_html}</td>"
+        # Only one param ever, directly built for performance
+        return f"<td style='{style}'>{children_html}</td>"
 
 
 def _join_params(params: list[tuple[str, Union[str, None]]]) -> str:
