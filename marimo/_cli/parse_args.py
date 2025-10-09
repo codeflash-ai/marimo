@@ -22,51 +22,70 @@ def parse_args(
 
     # Combine any arguments that are split by spaces
     new_args: list[str] = []
-    for arg in args:
+    append = new_args.append  # Local variable for faster access
+    iter_args = iter(args)
+    for arg in iter_args:
         if arg.startswith(("-", "--")):
-            new_args.append(arg)
+            append(arg)
         elif new_args:
-            new_args[-1] += f" {arg}"
+            # This can only ever be entered if new_args is nonempty
+            # Use string concatenation directly instead of f-string (faster for single value)
+            new_args[-1] += " " + arg
+
+    # Local vars for faster lookup
+    lstrip = str.lstrip
+    split = str.split
+    float_ = float
+    int_ = int
+
+    # Strings for comparison, reused to avoid recreating
+    true_strs = {"True", "true"}
+    false_strs = {"False", "false"}
 
     for arg in new_args:
         if arg.startswith(("-", "--")):
-            # Strip leading dashes
-            arg = arg.lstrip("-")
+            arg = lstrip(arg, "-")
             key: str
             value: Any
 
+            # Split only once (most common case fast-path)
             if "=" in arg:
-                key, value = arg.split("=", 1)
+                key, value = split(arg, "=", 1)
             elif " " in arg:
-                key, value = arg.split(" ", 1)
+                key, value = split(arg, " ", 1)
                 key = key.strip()
                 value = value.strip()
             else:
                 key = arg
                 value = ""
 
-            # Try numeric conversion
-            try:
-                value = int(value)
-            except ValueError:
+            # Fast path: check for digit value first (int)
+            if value and (value[0] == "-" or value[0].isdigit()):
+                # Only int if possible, else float, else leave as str
                 try:
-                    value = float(value)
+                    value = int_(value)
+                except ValueError:
+                    try:
+                        value = float_(value)
+                    except ValueError:
+                        pass
+            else:
+                # Try float only if value starts with digit (avoid float exception for words)
+                try:
+                    value = float_(value)
                 except ValueError:
                     pass
 
             # Try boolean conversion
-            if value == "True":
+            # Faster set membership testing
+            if value in true_strs:
                 value = True
-            elif value == "true":
-                value = True
-            elif value == "false":
-                value = False
-            elif value == "False":
+            elif value in false_strs:
                 value = False
 
             # Create a list for duplicate arguments
-            if key in args_dict:
-                current = args_dict[key]
+            current = args_dict.get(key)
+            if current is not None:
                 if isinstance(current, list):
                     current.append(value)
                 else:
