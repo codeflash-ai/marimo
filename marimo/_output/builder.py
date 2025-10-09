@@ -31,18 +31,16 @@ class _HTMLBuilder:
         alt: Optional[str] = None,
         style: Optional[str] = None,
     ) -> str:
-        params: list[tuple[str, Union[str, None]]] = []
-        if src:
-            params.append(("src", src))
-        if alt:
-            params.append(("alt", alt))
-        if style:
-            params.append(("style", style))
-
-        if len(params) == 0:
-            return "<img />"
-        else:
-            return f"<img {_join_params(params)} />"
+        # Faster: Avoid allocations for unused/None params and unnecessary list creation
+        result = "<img"
+        if src is not None and src != "":
+            result += f" src='{src}'"
+        if alt is not None and alt != "":
+            result += f" alt='{alt}'"
+        if style is not None and style != "":
+            result += f" style='{style}'"
+        result += " />"
+        return result
 
     @staticmethod
     def video(
