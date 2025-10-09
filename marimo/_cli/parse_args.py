@@ -22,11 +22,16 @@ def parse_args(
 
     # Combine any arguments that are split by spaces
     new_args: list[str] = []
+    append_new_arg = new_args.append
     for arg in args:
         if arg.startswith(("-", "--")):
-            new_args.append(arg)
+            append_new_arg(arg)
         elif new_args:
             new_args[-1] += f" {arg}"
+
+    # Precompute bool values for faster matching
+    bool_true = {"True", "true"}
+    bool_false = {"False", "false"}
 
     for arg in new_args:
         if arg.startswith(("-", "--")):
@@ -35,33 +40,36 @@ def parse_args(
             key: str
             value: Any
 
-            if "=" in arg:
-                key, value = arg.split("=", 1)
-            elif " " in arg:
-                key, value = arg.split(" ", 1)
-                key = key.strip()
-                value = value.strip()
+            eq_idx = arg.find("=")
+            if eq_idx != -1:
+                key, value = arg[:eq_idx], arg[eq_idx + 1 :]
             else:
-                key = arg
-                value = ""
+                sp_idx = arg.find(" ")
+                if sp_idx != -1:
+                    key, value = arg[:sp_idx], arg[sp_idx + 1 :]
+                    key = key.strip()
+                    value = value.strip()
+                else:
+                    key = arg
+                    value = ""
 
             # Try numeric conversion
-            try:
-                value = int(value)
-            except ValueError:
+            if value and (
+                value[0].isdigit()
+                or (value[0] == "-" and len(value) > 1 and value[1].isdigit())
+            ):
                 try:
-                    value = float(value)
+                    value = int(value)
                 except ValueError:
-                    pass
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        pass
 
             # Try boolean conversion
-            if value == "True":
+            elif value in bool_true:
                 value = True
-            elif value == "true":
-                value = True
-            elif value == "false":
-                value = False
-            elif value == "False":
+            elif value in bool_false:
                 value = False
 
             # Create a list for duplicate arguments
