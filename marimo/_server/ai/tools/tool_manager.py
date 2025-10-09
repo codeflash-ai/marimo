@@ -108,11 +108,18 @@ class ToolManager:
             return None
         else:
             # No source specified, check all sources
+
+            # Optimize: Call self._tools.get(name) first before scanning all tools
+            tool = self._tools.get(name)
+            if tool is not None:
+                return tool
+
+            # Only call _get_all_tools if not already found in backend tools
             all_tools = self._get_all_tools()
-            for tool in all_tools:
-                if tool.name == name:
-                    return tool
-            return None
+            # Use a generator expression for an early-out (avoids creating a list)
+            return next(
+                (tool for tool in all_tools if tool.name == name), None
+            )
 
     def _validate_backend_tool_arguments(
         self, tool_name: str, arguments: FunctionArgs
@@ -139,10 +146,16 @@ class ToolManager:
                 return False, error_msg
 
         # If no validation, use basic validation against parameters schema
-        required_params = tool.parameters.get("required", [])
-        for param in required_params:
-            if param not in arguments:
-                error_msg = f"Missing required parameter '{param}'"
+        required_params = tool.parameters.get("required", ())
+        # Use set difference for faster check if required_params is large
+        if required_params:
+            # Only use set check if number of required_params is significant
+            missing = next(
+                (param for param in required_params if param not in arguments),
+                None,
+            )
+            if missing is not None:
+                error_msg = f"Missing required parameter '{missing}'"
                 LOGGER.warning(
                     f"Basic validation failed for '{tool_name}': {error_msg}"
                 )
