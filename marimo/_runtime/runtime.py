@@ -391,15 +391,16 @@ def notebook_dir() -> pathlib.Path | None:
     except ContextNotInitializedError:
         # If we are not running in a notebook (e.g. exported to Jupyter),
         # return the current working directory
-        return pathlib.Path().absolute()
+        return pathlib.Path.cwd()
 
     # NB: __file__ is patched by runner, so always bound to be correct.
     filename = ctx.globals.get("__file__", None) or ctx.filename
     if filename is not None:
         path = pathlib.Path(filename).resolve()
-        while not path.is_dir():
+        # Avoid excessive filesystem checks by breaking at root
+        while not path.is_dir() and path != path.parent:
             path = path.parent
-        return path
+        return path if path.is_dir() else None
 
     return None
 
