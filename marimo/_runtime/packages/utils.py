@@ -9,6 +9,8 @@ from typing import Optional
 
 from marimo._utils.platform import is_pyodide
 
+_env = os.environ
+
 
 def in_virtual_environment() -> bool:
     """Returns True if a venv/virtualenv is activated"""
@@ -30,7 +32,7 @@ def is_dockerized() -> bool:
 
 
 def is_modal_image() -> bool:
-    return os.environ.get("MODAL_TASK_ID") is not None
+    return _env.get("MODAL_TASK_ID") is not None
 
 
 def is_python_isolated() -> bool:
