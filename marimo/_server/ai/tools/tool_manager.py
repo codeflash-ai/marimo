@@ -164,9 +164,11 @@ class ToolManager:
     def _convert_mcp_tool(self, mcp_tool: MCPRawTool) -> ToolDefinition:
         """Convert an MCP tool to marimo Tool format."""
         # Get namespaced name from meta field (meta is dict[str, Any] | None)
-        meta = mcp_tool.meta or {}
+        meta = mcp_tool.meta
         namespaced_name = (
-            meta.get("namespaced_name") if isinstance(meta, dict) else None
+            meta.get("namespaced_name")
+            if meta is not None and isinstance(meta, dict)
+            else None
         )
 
         # Convert to marimo Tool format
