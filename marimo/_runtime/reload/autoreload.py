@@ -402,13 +402,12 @@ def append_obj(
     name: str,
     obj: object,
 ) -> bool:
-    in_module = (
-        hasattr(obj, "__module__") and obj.__module__ == module.__name__
-    )
+    module_name = module.__name__
+    in_module = hasattr(obj, "__module__") and obj.__module__ == module_name
     if not in_module:
         return False
 
-    key = (module.__name__, name)
+    key = (module_name, name)
     try:
         d.setdefault(key, []).append(weakref.ref(obj))
     except TypeError:
@@ -431,22 +430,20 @@ def superreload(
     if old_objects is None:
         old_objects = {}
 
+    module_name = module.__name__
+
     # collect old objects in the module
-    for name, obj in list(module.__dict__.items()):
-        if not append_obj(module, old_objects, name, obj):
-            continue
-        key = (module.__name__, name)
-        try:
-            old_objects.setdefault(key, []).append(weakref.ref(obj))
-        except TypeError:
-            pass
+    # Avoid double weakref addition: append_obj is solely responsible
+    module_dict_items = tuple(module.__dict__.items())
+    for name, obj in module_dict_items:
+        append_obj(module, old_objects, name, obj)
 
     # reload module
     old_dict: dict[str, Any] | None = None
     try:
         # clear namespace first from old cruft
         old_dict = module.__dict__.copy()
-        old_name = module.__name__
+        old_name = module_name
         module.__dict__.clear()
         module.__dict__["__name__"] = old_name
         module.__dict__["__loader__"] = old_dict["__loader__"]
@@ -456,12 +453,6 @@ def superreload(
     try:
         module = reload(module)
     except Exception as e:
-        # User introduced a SyntaxError, ModuleNotFoundError, etc -- they
-        # should be told, and module dict should not be restored, ie don't fail
-        # silently.
-        #
-        # It's possible that the module fails to reload for some other reason.
-        # In this case, too, the failure shouldn't be silent!
         sys.stderr.write(
             f"Error trying to reload module {module.__name__}: {str(e)} \n"
         )
@@ -472,8 +463,10 @@ def superreload(
         raise
 
     # iterate over all objects and update functions & classes
-    for name, new_obj in list(module.__dict__.items()):
-        key = (module.__name__, name)
+    # Use tuple for items to avoid repeated list allocations if possible
+    module_dict_items = tuple(module.__dict__.items())
+    for name, new_obj in module_dict_items:
+        key = (module_name, name)
         if key not in old_objects:
             continue
 
