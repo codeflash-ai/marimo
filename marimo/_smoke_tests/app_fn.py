@@ -65,7 +65,7 @@ def addition(a: int, b: int) -> int:
 def bad_divide_curry(x):
     # Filler line
     # To push the error
-    return divide(0, x)
+    return x / 0
 
 
 @app.cell
