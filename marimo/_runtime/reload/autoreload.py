@@ -131,10 +131,10 @@ class ModuleDependencyFinder:
             return finder.modules  # type: ignore[return-value]
 
     def cached(self, module: types.ModuleType) -> bool:
-        if not hasattr(module, "__file__") or module.__file__ is None:
+        module_file = getattr(module, "__file__", None)
+        if module_file is None:
             return False
-
-        return module.__file__ in self._module_dependencies
+        return module_file in self._module_dependencies
 
     def evict_from_cache(self, module: types.ModuleType) -> None:
         file = module.__file__
