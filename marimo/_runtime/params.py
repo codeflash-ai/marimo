@@ -190,13 +190,37 @@ class CLIArgs:
 
     T = TypeVar("T", Primitive, list[Primitive])
 
-    @overload
-    def get(self, key: str) -> Optional[ListOrValue[Primitive]]: ...
+    def get(self, key: str) -> Optional[ListOrValue[Primitive]]:
+        """Get the value of the CLI arg.
 
-    @overload
-    def get(
-        self, key: str, default: T
-    ) -> Union[ListOrValue[Primitive], T]: ...
+        Args:
+            key: The key to look up
+            default: Value to return if key is not found
+
+        Returns:
+            A singleton value if there is only one item,
+            a list of values otherwise.
+            If key is not found and default is provided, returns default.
+        """
+        if key not in self._params:
+            return default
+        return self._params[key]
+
+    def get(self, key: str, default: T) -> Union[ListOrValue[Primitive], T]:
+        """Get the value of the CLI arg.
+
+        Args:
+            key: The key to look up
+            default: Value to return if key is not found
+
+        Returns:
+            A singleton value if there is only one item,
+            a list of values otherwise.
+            If key is not found and default is provided, returns default.
+        """
+        if key not in self._params:
+            return default
+        return self._params[key]
 
     def get(
         self, key: str, default: Optional[ListOrValue[Primitive]] = None
@@ -226,7 +250,9 @@ class CLIArgs:
         return [value]
 
     def __getitem__(self, key: str) -> Optional[ListOrValue[Primitive]]:
-        return self.get(key)
+        # Direct dict access is faster than indirection via self.get, because it avoids
+        # an additional function call and logic for cases when key isn't present.
+        return self._params[key] if key in self._params else None
 
     def __contains__(self, key: str) -> bool:
         return key in self._params
