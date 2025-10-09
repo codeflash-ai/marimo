@@ -142,5 +142,6 @@ class RuleEngine:
     ) -> RuleEngine:
         """Create a RuleEngine with all default rules."""
         # TODO: Filter rules based on user configuration if needed
-        rules = [rule() for rule in RULE_CODES.values()]
+        values = RULE_CODES.values()
+        rules = [rule() for rule in values]
         return cls(rules, early_stopping)
