@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Union, overload
+from typing import TYPE_CHECKING, Any, TypeGuard, Union, overload
 
 import narwhals as nw_main
 import narwhals.dtypes as nw_dtypes
@@ -68,6 +68,8 @@ def can_narwhalify(
     Check if the given object can be narwhalified.
     """
     if obj is None:
+        return False
+    if isinstance(obj, (int, float, complex, str, bytes, bool)):
         return False
     try:
         nw.from_native(obj, pass_through=False, eager_only=eager_only)  # type: ignore[call-overload]
