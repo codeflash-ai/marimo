@@ -54,6 +54,12 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def __init__(self, data: JsonTableData):
         self.data = data
         self.is_column_oriented = _is_column_oriented(data)
+        # Precompute keys for column-oriented data (optimization)
+        if isinstance(self.data, dict) and self.is_column_oriented:
+            # .keys() returns a view, but we want a list and to avoid recomputation
+            self._column_names: list[str] = list(self.data.keys())
+        else:
+            self._column_names = None
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -352,8 +358,14 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if isinstance(self.data, dict):
             if not self.is_column_oriented:
                 return [KEY, VALUE]
-            return list(self.data.keys())
-        first = next(iter(self.data), None)
+            # Use precomputed keys
+            return self._column_names
+        # Data is not a dict: must be a sequence
+        iterator = iter(self.data)
+        try:
+            first = next(iterator)
+        except StopIteration:
+            first = None
         return list(first.keys()) if isinstance(first, dict) else ["value"]
 
     def get_unique_column_values(self, column: str) -> list[str | int | float]:
