@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from narwhals.typing import IntoDataFrame, IntoFrame, IntoLazyFrame
     from typing_extensions import TypeIs
 
+_NARWHALS_DF_TYPES = (nw.DataFrame, nw_main.DataFrame, nw1.DataFrame)
+
 
 @overload
 def empty_df(native_df: IntoDataFrame) -> IntoDataFrame: ...
@@ -249,8 +251,4 @@ def is_narwhals_dataframe(df: Any) -> TypeIs[nw.DataFrame[Any]]:
 
     Checks both v1 and main.
     """
-    return (
-        isinstance(df, nw.DataFrame)
-        or isinstance(df, nw_main.DataFrame)
-        or isinstance(df, nw1.DataFrame)
-    )
+    return isinstance(df, _NARWHALS_DF_TYPES)
