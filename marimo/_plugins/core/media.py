@@ -142,11 +142,14 @@ def io_to_data_url(
 
 def is_data_empty(data: Union[str, bytes, io.BytesIO, Any]) -> bool:
     """Check if a data object is empty."""
-    if isinstance(data, str):
+    if type(data) is str:
         return data == ""
 
-    if isinstance(data, bytes):
+    if type(data) is bytes:
         return data == b""
+
+    if isinstance(data, io.BytesIO):
+        return data.getbuffer().nbytes == 0
 
     if hasattr(data, "getbuffer"):
         return cast(io.BytesIO, data).getbuffer().nbytes == 0
