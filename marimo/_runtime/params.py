@@ -96,7 +96,9 @@ class QueryParams(State[SerializedQueryParams]):
         return f"QueryParams({self._params})"
 
     def __str__(self) -> str:
-        return str(self._params)
+        if not self._params:
+            return "{}"
+        return self._params.__repr__()
 
     def __setitem__(self, key: str, value: Union[str, list[str]]) -> None:
         if value is None or value == []:  # type: ignore
