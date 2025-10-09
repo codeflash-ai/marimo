@@ -114,7 +114,15 @@ def get_user_config_path() -> Optional[str]:
 
 def deep_copy(obj: Any) -> Any:
     if isinstance(obj, dict):
-        return {k: deep_copy(v) for k, v in obj.items()}  # type: ignore
+        result = {}
+        for k, v in obj.items():
+            result[k] = deep_copy(v)
+        return result  # type: ignore
     if isinstance(obj, list):
-        return [deep_copy(v) for v in obj]  # type: ignore
+        # Faster than list comprehension for large nested lists due to less frame pushing
+        result = []
+        append = result.append
+        for v in obj:
+            append(deep_copy(v))
+        return result  # type: ignore
     return obj
