@@ -252,16 +252,12 @@ class _HTMLBuilder:
             [children] if isinstance(children, str) else children
         )
 
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
         children_html = "".join(resolved_children)
 
-        if len(params) == 0:
-            return f"<tbody>{children_html}</tbody>"
+        if style:
+            return f"<tbody style='{style}'>{children_html}</tbody>"
         else:
-            return f"<tbody {_join_params(params)}>{children_html}</tbody>"
+            return f"<tbody>{children_html}</tbody>"
 
     @staticmethod
     def tr(
