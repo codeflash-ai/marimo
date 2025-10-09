@@ -33,9 +33,10 @@ def walk(path: Path) -> Iterable[tuple[Path, list[str], list[str]]]:
 def _hashable_walk(
     walked: Iterable[tuple[Path, list[str], list[str]]],
 ) -> set[tuple[Path, tuple[str], tuple[str]]]:
+    # Optimization: Avoid map/tuple overhead and unpack directly for faster execution.
     return cast(
         set[tuple[Path, tuple[str], tuple[str]]],
-        set((p, *map(tuple, r)) for p, *r in walked),
+        {(p, tuple(dirs), tuple(files)) for p, dirs, files in walked},
     )
 
 
