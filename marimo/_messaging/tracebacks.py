@@ -3,7 +3,15 @@ from __future__ import annotations
 
 import sys
 
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import PythonTracebackLexer
+
 from marimo._messaging.types import Stderr
+
+_formatter = HtmlFormatter()
+
+_lexer = PythonTracebackLexer()
 
 
 def _highlight_traceback(traceback: str) -> str:
@@ -11,13 +19,7 @@ def _highlight_traceback(traceback: str) -> str:
     Highlight the traceback with color.
     """
 
-    from pygments import highlight
-    from pygments.formatters import HtmlFormatter
-    from pygments.lexers import PythonTracebackLexer
-
-    formatter = HtmlFormatter()
-
-    body = highlight(traceback, PythonTracebackLexer(), formatter)
+    body = highlight(traceback, _lexer, _formatter)
     return f'<span class="codehilite">{body}</span>'
 
 
