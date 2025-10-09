@@ -171,17 +171,19 @@ class DBAPIEngine(QueryEngine[DBAPIConnection]):
             desc = getattr(cursor, "description", None)
             if desc:
                 cols: list[dict[str, Optional[Any]]] = []
+                cols_append = cols.append
                 for col in desc:
                     # description tuple: (name, type_code, display_size, internal_size, precision, scale, null_ok)
+                    col_len = len(col)
                     name = col[0]
-                    type_code = col[1] if len(col) > 1 else None
-                    display_size = col[2] if len(col) > 2 else None
-                    internal_size = col[3] if len(col) > 3 else None
-                    precision = col[4] if len(col) > 4 else None
-                    scale = col[5] if len(col) > 5 else None
-                    null_ok = col[6] if len(col) > 6 else None
+                    type_code = col[1] if col_len > 1 else None
+                    display_size = col[2] if col_len > 2 else None
+                    internal_size = col[3] if col_len > 3 else None
+                    precision = col[4] if col_len > 4 else None
+                    scale = col[5] if col_len > 5 else None
+                    null_ok = col[6] if col_len > 6 else None
 
-                    cols.append(
+                    cols_append(
                         {
                             "name": name,
                             "type_code": type_code,
