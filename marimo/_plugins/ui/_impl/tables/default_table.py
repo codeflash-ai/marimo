@@ -35,6 +35,14 @@ from marimo._plugins.ui._impl.tables.table_manager import (
     TableManager,
 )
 
+_HAS_PANDAS = DependencyManager.pandas.has()
+
+_HAS_POLARS = DependencyManager.polars.has()
+
+_PANDAS_MANAGER_CLS = None
+
+_POLARS_MANAGER_CLS = None
+
 JsonTableData = Union[
     Sequence[Union[str, int, float, bool, MIME, None]],
     Sequence[JSONType],
@@ -309,22 +317,20 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return []
 
     def _as_table_manager(self) -> TableManager[Any]:
-        if DependencyManager.pandas.has():
+        if _HAS_PANDAS:
             import pandas as pd
 
-            return PandasTableManagerFactory.create()(pd.DataFrame(self.data))
-        if DependencyManager.polars.has():
+            return _get_pandas_manager_cls()(pd.DataFrame(self.data))
+        if _HAS_POLARS:
             import polars as pl
 
             if isinstance(self.data, dict) and not self.is_column_oriented:
-                return PolarsTableManagerFactory.create()(
+                return _get_polars_manager_cls()(
                     pl.DataFrame(self._normalize_data(self.data))
                 )
-
-            return PolarsTableManagerFactory.create()(
+            return _get_polars_manager_cls()(
                 pl.DataFrame(cast(Any, self.data))
             )
-
         raise ValueError("No supported table libraries found.")
 
     def get_stats(self, column: str) -> ColumnStats:
@@ -473,7 +479,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
             )
 
         # Handle empty data
-        if len(data) == 0:
+        if not data:
             return []
 
         # Handle single-column data
@@ -496,3 +502,17 @@ def _is_column_oriented(data: JsonTableData) -> bool:
     return isinstance(data, dict) and all(
         isinstance(value, (list, tuple)) for value in data.values()
     )
+
+
+def _get_pandas_manager_cls():
+    global _PANDAS_MANAGER_CLS
+    if _PANDAS_MANAGER_CLS is None:
+        _PANDAS_MANAGER_CLS = PandasTableManagerFactory.create()
+    return _PANDAS_MANAGER_CLS
+
+
+def _get_polars_manager_cls():
+    global _POLARS_MANAGER_CLS
+    if _POLARS_MANAGER_CLS is None:
+        _POLARS_MANAGER_CLS = PolarsTableManagerFactory.create()
+    return _POLARS_MANAGER_CLS
