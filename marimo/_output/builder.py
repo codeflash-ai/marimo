@@ -303,10 +303,10 @@ class _HTMLBuilder:
 
 
 def _join_params(params: list[tuple[str, Union[str, None]]]) -> str:
-    # Filter None
-    params = [(k, v) for k, v in params if v is not None]
-
-    return " ".join([f"{k}='{v}'" if v != "" else f"{k}" for k, v in params])
+    # Filter None and format in single pass
+    return " ".join(
+        f"{k}='{v}'" if v != "" else f"{k}" for k, v in params if v is not None
+    )
 
 
 h = _HTMLBuilder()
