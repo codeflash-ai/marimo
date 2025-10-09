@@ -5,6 +5,7 @@ import base64
 import io
 import mimetypes
 import pathlib
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 from urllib.parse import urlparse
 
@@ -41,6 +42,7 @@ def guess_mime_type(
     return None
 
 
+@lru_cache(maxsize=128)
 def mime_type_to_ext(mime_type: str) -> Optional[str]:
     return mimetypes.guess_extension(mime_type, strict=False)
 
