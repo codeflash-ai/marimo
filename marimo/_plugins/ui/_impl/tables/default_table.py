@@ -493,6 +493,10 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
 
 def _is_column_oriented(data: JsonTableData) -> bool:
-    return isinstance(data, dict) and all(
-        isinstance(value, (list, tuple)) for value in data.values()
-    )
+    if not isinstance(data, dict):
+        return False
+    seq_types = (list, tuple)
+    for value in data.values():
+        if not isinstance(value, seq_types):
+            return False
+    return True
