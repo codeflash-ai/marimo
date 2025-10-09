@@ -106,9 +106,12 @@ class MCPTransportRegistry:
     """Registry for MCP transport connectors."""
 
     def __init__(self) -> None:
+        # Store in a tuple to avoid name lookup per instantiation
+        stdio = StdioTransportConnector()
+        streamable_http = StreamableHTTPTransportConnector()
         self._connectors: dict[MCPTransportType, MCPTransportConnector] = {
-            MCPTransportType.STDIO: StdioTransportConnector(),
-            MCPTransportType.STREAMABLE_HTTP: StreamableHTTPTransportConnector(),
+            MCPTransportType.STDIO: stdio,
+            MCPTransportType.STREAMABLE_HTTP: streamable_http,
         }
 
     def get_connector(
@@ -125,6 +128,7 @@ class MCPTransportRegistry:
         Raises:
             ValueError: If transport type is not supported
         """
-        if transport_type not in self._connectors:
+        try:
+            return self._connectors[transport_type]
+        except KeyError:
             raise ValueError(f"Unsupported transport type: {transport_type}")
-        return self._connectors[transport_type]
