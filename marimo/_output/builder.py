@@ -79,16 +79,16 @@ class _HTMLBuilder:
         src: Optional[str] = None,
         controls: bool = True,
     ) -> str:
-        params: list[tuple[str, Union[str, None]]] = []
-        if src:
-            params.append(("src", src))
-        if controls:
-            params.append(("controls", ""))
-
-        if len(params) == 0:
+        if not src and not controls:
             return "<audio></audio>"
-        else:
-            return f"<audio {_join_params(params)}></audio>"
+
+        if src and controls:
+            return f"<audio src='{src}' controls></audio>"
+        elif src:
+            return f"<audio src='{src}'></audio>"
+        elif controls:
+            return "<audio controls></audio>"
+        return "<audio></audio>"
 
     @staticmethod
     def iframe(
