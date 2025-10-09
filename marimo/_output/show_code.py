@@ -11,24 +11,25 @@ from marimo._plugins.ui._impl.input import code_editor
 from marimo._runtime.context import get_context
 from marimo._runtime.context.types import ContextNotInitializedError
 
+_pattern_show_code = re.compile(r"mo\.show_code\((.*)\)", flags=re.DOTALL)
+
+_pattern_position = re.compile(
+    r",?\s*position\s*=\s*[\"']?(above|below)[\"']?,?\s*\)?$",
+    flags=re.DOTALL,
+)
+
+_pattern_code_first = re.compile(
+    r",?\s*code_first\s*=\s*(True|False),?\s*\)?$",
+    flags=re.DOTALL,
+)
+
 
 def substitute_show_code_with_arg(code: str) -> str:
-    pattern = r"mo\.show_code\((.*)\)"
-    modified_code = re.sub(pattern, r"\1", code, flags=re.DOTALL).strip()
+    modified_code = _pattern_show_code.sub(r"\1", code).strip()
     # Remove position=above or position=below from the end
-    modified_code = re.sub(
-        r",?\s*position\s*=\s*[\"']?(above|below)[\"']?,?\s*\)?$",
-        "",
-        modified_code,
-        flags=re.DOTALL,
-    ).strip()
+    modified_code = _pattern_position.sub("", modified_code).strip()
     # For backward compatibility, also handle code_first
-    modified_code = re.sub(
-        r",?\s*code_first\s*=\s*(True|False),?\s*\)?$",
-        "",
-        modified_code,
-        flags=re.DOTALL,
-    ).strip()
+    modified_code = _pattern_code_first.sub("", modified_code).strip()
     return modified_code
 
 
