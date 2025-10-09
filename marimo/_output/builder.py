@@ -103,25 +103,25 @@ class _HTMLBuilder:
         frameborder: Optional[str] = "0",
         **kwargs: str,
     ) -> str:
-        params: list[tuple[str, Union[str, None]]] = []
-        if src:
-            params.append(("src", src))
-        if srcdoc:
-            params.append(("srcdoc", srcdoc))
-        if width:
-            params.append(("width", width))
-        if height:
-            params.append(("height", height))
-        if style:
-            params.append(("style", style))
-        if onload:
-            params.append(("onload", onload))
-        if frameborder:
-            params.append(("frameborder", frameborder))
-        for key, value in kwargs.items():
-            params.append((key, value))
+        # Build params with a generator and avoid multiple appends, minimize object creation
+        params: list[tuple[str, Union[str, None]]] = [
+            (k, v)
+            for k, v in (
+                ("src", src),
+                ("srcdoc", srcdoc),
+                ("width", width),
+                ("height", height),
+                ("style", style),
+                ("onload", onload),
+                ("frameborder", frameborder),
+            )
+            if v
+        ]
+        # Extend params directly from kwargs if there are any (no-op if not)
+        if kwargs:
+            params.extend(kwargs.items())
 
-        if len(params) == 0:
+        if not params:
             return "<iframe></iframe>"
         else:
             return f"<iframe {_join_params(params)}></iframe>"
@@ -303,10 +303,12 @@ class _HTMLBuilder:
 
 
 def _join_params(params: list[tuple[str, Union[str, None]]]) -> str:
-    # Filter None
-    params = [(k, v) for k, v in params if v is not None]
-
-    return " ".join([f"{k}='{v}'" if v != "" else f"{k}" for k, v in params])
+    # Avoid unnecessary list - use a generator expression directly in join
+    return " ".join(
+        f"{k}='{v}'" if v is not None and v != "" else f"{k}"
+        for k, v in params
+        if v is not None
+    )
 
 
 h = _HTMLBuilder()
