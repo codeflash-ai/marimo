@@ -157,20 +157,20 @@ class NameTransformer(ast.NodeTransformer):
 
     def visit_Assign(self, node: ast.Assign) -> ast.Assign:
         self.generic_visit(node)
-        new_targets: list[Any] = []
-        for target in node.targets:
+        new_targets: list[Any] = None
+        for idx, target in enumerate(node.targets):
             if (
                 isinstance(target, ast.Name)
                 and target.id in self._name_substitutions
             ):
                 self.made_changes = True
-                new_targets.append(
-                    ast.Name(
-                        id=self._name_substitutions[target.id], ctx=ast.Store()
-                    )
+                if new_targets is None:
+                    new_targets = list(node.targets)
+                new_targets[idx] = ast.Name(
+                    id=self._name_substitutions[target.id], ctx=ast.Store()
                 )
-            else:
-                new_targets.append(target)
+        if new_targets is None:
+            return node
         return ast.Assign(
             **{
                 **node.__dict__,
