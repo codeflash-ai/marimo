@@ -149,14 +149,42 @@ MarkdownSize = Literal["sm", "base", "lg", "xl", "2xl"]
 
 
 def _has_module(module_name: str) -> bool:
+    # Cache the result to avoid repeated expensive find_spec calls
+    # Module cache is safe because module availability rarely changes at runtime
+    # New helper to reduce redundant find_spec calls
+    if not hasattr(_has_module, "_cache"):
+        _has_module._cache = {}
+    cache_dict = _has_module._cache
+    if module_name in cache_dict:
+        return cache_dict[module_name]
     try:
-        return find_spec(module_name) is not None
+        result = find_spec(module_name) is not None
     except Exception:
-        return False
+        result = False
+    cache_dict[module_name] = result
+    return result
 
 
 @cache
 def _get_extensions() -> list[Union[str, markdown.Extension]]:
+    # The "caption", "tab", "details", and "admonition" modules are checked for existence.
+    # Use a list comprehension with side-effect-free _has_module to minimize repeated slow calls.
+    # Since _has_module is now cached, this is optimal for performance.
+
+    # Assign modules to variable so loop isn't repeated multiple times in memory
+    caption_tab_details_admonition = [
+        "pymdownx.blocks.caption",
+        "pymdownx.blocks.tab",
+        "pymdownx.blocks.details",
+        "pymdownx.blocks.admonition",
+    ]
+    available_blocks = [
+        module
+        for module in caption_tab_details_admonition
+        if _has_module(module)
+    ]
+
+    # Evaluate all items in a linear pass; star expansion remains as before
     return [
         # Syntax highlighting
         PyconDetectorExtension(),  # Python console detection (run before highlight)
@@ -175,18 +203,7 @@ def _get_extensions() -> list[Union[str, markdown.Extension]]:
         # Task lists
         "pymdownx.tasklist",
         # Caption, Tabs, Details
-        *(
-            [
-                module
-                for module in [
-                    "pymdownx.blocks.caption",
-                    "pymdownx.blocks.tab",
-                    "pymdownx.blocks.details",
-                    "pymdownx.blocks.admonition",
-                ]
-                if _has_module(module)
-            ]
-        ),
+        *available_blocks,
         # Critic - color-coded markup
         "pymdownx.critic",
         # Emoji - :emoji:
