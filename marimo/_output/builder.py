@@ -172,20 +172,19 @@ class _HTMLBuilder:
     def figcaption(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
-            return f"<figcaption>{children_html}</figcaption>"
+        # Avoid unnecessary list creation if children are already a list
+        if isinstance(children, str):
+            children_html = children
         else:
-            return f"<figcaption {_join_params(params)}>{children_html}</figcaption>"
+            # This .join is already optimal; don't copy children or new lists
+            children_html = "".join(children)
+
+        # Only create params list if there is a style
+        if style:
+            # Don't use list of 1 then check len, inline the formatting
+            return f"<figcaption style='{style}'>{children_html}</figcaption>"
+        else:
+            return f"<figcaption>{children_html}</figcaption>"
 
     @staticmethod
     def h3(
