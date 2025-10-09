@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Union, overload
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any, TypeGuard, Union, overload
 
 import narwhals as nw_main
 import narwhals.dtypes as nw_dtypes
@@ -166,26 +167,32 @@ def can_narwhalify_lazyframe(df: Any) -> TypeGuard[Any]:
     """
     Check if the given object is a narwhals lazyframe.
     """
-    if nw.dependencies.is_polars_lazyframe(df):
+    dependencies = nw.dependencies
+
+    if dependencies.is_polars_lazyframe(df):
         return True
-    if hasattr(
-        nw.dependencies, "is_pyspark_dataframe"
-    ) and nw.dependencies.is_pyspark_dataframe(df):
+
+    pyspark_dataframe = getattr(dependencies, "is_pyspark_dataframe", None)
+    if pyspark_dataframe is not None and pyspark_dataframe(df):
         return True
-    if hasattr(
-        nw.dependencies, "is_pyspark_connect_dataframe"
-    ) and nw.dependencies.is_pyspark_connect_dataframe(df):
+
+    pyspark_connect_dataframe = getattr(
+        dependencies, "is_pyspark_connect_dataframe", None
+    )
+    if pyspark_connect_dataframe is not None and pyspark_connect_dataframe(df):
         return True
-    if nw.dependencies.is_dask_dataframe(df):
+
+    if dependencies.is_dask_dataframe(df):
         return True
-    if hasattr(nw.dependencies, "is_duckdb_relation"):
-        if nw.dependencies.is_duckdb_relation(df):
+
+    is_duckdb_relation = getattr(dependencies, "is_duckdb_relation", None)
+    if is_duckdb_relation is not None:
+        if is_duckdb_relation(df):
             return True
     elif DependencyManager.duckdb.has():
         # Fallback if is_duckdb_relation is not available
-        import duckdb
-
-        return isinstance(df, duckdb.DuckDBPyRelation)
+        duckdb_relation_type = _get_duckdb_relation_type()
+        return isinstance(df, duckdb_relation_type)
     return False
 
 
@@ -254,3 +261,11 @@ def is_narwhals_dataframe(df: Any) -> TypeIs[nw.DataFrame[Any]]:
         or isinstance(df, nw_main.DataFrame)
         or isinstance(df, nw1.DataFrame)
     )
+
+
+# Internal helper to avoid repeated duckdb import/attribute lookup
+@lru_cache(maxsize=1)
+def _get_duckdb_relation_type():
+    import duckdb
+
+    return duckdb.DuckDBPyRelation

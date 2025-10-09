@@ -6,6 +6,7 @@ import importlib.util
 import shutil
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 
 from marimo._dependencies.errors import ManyModulesNotFoundError
 
@@ -19,7 +20,8 @@ class Dependency:
     def has(self, quiet: bool = False) -> bool:
         """Return True if the dependency is installed."""
         try:
-            has_dep = importlib.util.find_spec(self.pkg) is not None
+            # Use cached spec lookup to speed up repeated queries
+            has_dep = _cached_find_spec(self.pkg) is not None
             if not has_dep:
                 return False
         except (ModuleNotFoundError, importlib.metadata.PackageNotFoundError):
@@ -182,6 +184,12 @@ def _version_check(
         return False
 
     return True
+
+
+# Cache module spec lookups to avoid repeated expensive find_spec calls
+@lru_cache(maxsize=128)
+def _cached_find_spec(pkg: str):
+    return importlib.util.find_spec(pkg)
 
 
 class DependencyManager:
