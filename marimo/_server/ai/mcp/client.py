@@ -594,8 +594,11 @@ class MCPClient:
 
     def get_server_status(self, server_name: str) -> Optional[MCPServerStatus]:
         """Get the status of a specific server."""
-        connection = self.connections.get(server_name)
-        return connection.status if connection else None
+        try:
+            connection = self.connections[server_name]
+        except KeyError:
+            return None
+        return connection.status
 
     def get_all_server_statuses(self) -> dict[str, MCPServerStatus]:
         """Get the status of all servers."""
