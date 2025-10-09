@@ -48,10 +48,15 @@ def _get_store_from_config(
     if config is None:
         return DEFAULT_STORE()
 
-    cache_stores = copy.copy(cast(dict[str, StoreType], CACHE_STORES))
-    cache_stores.update(
-        {name: registry.get(name) for name in registry.names()}
-    )
+    # Avoid unnecessary deep copies: only copy/update if adding extensions
+    cache_stores = CACHE_STORES.copy()
+    # Fetch registry extensions just once if needed
+    extension_names = registry.names()
+    if extension_names:
+        extension_stores = {
+            name: registry.get(name) for name in extension_names
+        }
+        cache_stores.update(extension_stores)
 
     if isinstance(config, list):
         sub_stores = [

@@ -1,5 +1,6 @@
 # Copyright 2025 Marimo. All rights reserved.
 import os
+from functools import lru_cache
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Generic, Optional, TypeVar, cast
 
@@ -101,11 +102,15 @@ class EntryPointRegistry(Generic[T]):
         Returns:
             A sorted list of plugin names.
         """
-        registered = list(self._plugins.keys())
-        entry_points_list = get_entry_points(self.entry_point_group)
+        # Use per-class/in-memory cache for entry points by group, since it's expensive
+        reg_names = list(self._plugins.keys())
+        # Efficient lookup with static LRU cache
+        entry_points_list = self._cached_entry_points(self.entry_point_group)
         entry_point_names = [ep.name for ep in entry_points_list]
-        all_names = set(registered + entry_point_names)
-        return sorted(name for name in all_names if self._is_allowed(name))
+        all_names = set(reg_names)
+        all_names.update(entry_point_names)
+        filtered = [name for name in all_names if self._is_allowed(name)]
+        return sorted(filtered)
 
     def get(self, name: str) -> T:
         """Get a plugin by name, loading it from entry points if necessary.
@@ -126,6 +131,9 @@ class EntryPointRegistry(Generic[T]):
 
         if name in self._plugins:
             return self._plugins[name]
+
+        # We need to search entry points anew — don't use the cache for loading
+        from marimo._entrypoints.registry import get_entry_points
 
         entry_points_list = get_entry_points(self.entry_point_group)
         for ep in entry_points_list:
@@ -148,6 +156,14 @@ class EntryPointRegistry(Generic[T]):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(group={self.entry_point_group!r}, registered={self.names()!r})"
+
+    # Efficient static lru_cache'd getter by entry point group string, for rapid repeated access
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _cached_entry_points(entry_point_group: str):
+        from marimo._entrypoints.registry import get_entry_points
+
+        return list(get_entry_points(entry_point_group))
 
 
 def get_entry_points(group: KnownEntryPoint) -> "EntryPoints":
