@@ -459,7 +459,7 @@ class MCPClient:
 
     def is_error_result(self, result: CallToolResult) -> bool:
         """Check if a CallToolResult represents an error."""
-        return hasattr(result, "isError") and result.isError is True
+        return getattr(result, "isError", False) is True
 
     async def invoke_tool(
         self,
