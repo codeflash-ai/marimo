@@ -54,6 +54,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def __init__(self, data: JsonTableData):
         self.data = data
         self.is_column_oriented = _is_column_oriented(data)
+        self._is_dict = isinstance(data, dict)
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -346,7 +347,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return len(self.data)
 
     def get_num_columns(self) -> int:
-        return len(self.data) if isinstance(self.data, dict) else 1
+        return len(self.data) if self._is_dict else 1
 
     def get_column_names(self) -> list[str]:
         if isinstance(self.data, dict):
