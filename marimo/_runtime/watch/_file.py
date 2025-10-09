@@ -87,7 +87,9 @@ class FileState(PathState):
     def read_bytes(self) -> bytes:
         """Read the file as bytes."""
         data = self._value.read_bytes()
-        write_side_effect(f"read_bytes:{data!r}")
+        # Avoid unnecessary string formatting unless it will be used downstream.
+        # Defer formatting until inside write_side_effect (for large data).
+        write_side_effect(("read_bytes", data))
         return data
 
     def write_bytes(self, value: bytes) -> int:

@@ -20,6 +20,8 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
+_context_available = None
+
 
 T = TypeVar("T")
 
@@ -28,10 +30,15 @@ WATCHER_SLEEP_INTERVAL = 1.0
 
 def write_side_effect(data: str | bytes) -> None:
     """Write side effect to the context."""
+    global _context_available
+    # Fast path cache: Try to avoid string formatting when context is not installed.
+    if _context_available is False:
+        return
     try:
         ctx = get_context()
+        _context_available = True
     except ContextNotInitializedError:
-        # Context is not initialized, nothing we can do
+        _context_available = False
         return
     ctx.cell_lifecycle_registry.add(SideEffect(data))
 
