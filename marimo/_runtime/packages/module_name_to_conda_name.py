@@ -5,11 +5,15 @@ from marimo._runtime.packages.module_name_to_pypi_name import (
     module_name_to_pypi_name,
 )
 
+# Cache the conda mapping on first use to avoid repeated dict copying and mutation.
+_CONDA_MAPPING: dict[str, str] | None = None
+
 
 def module_name_to_conda_name() -> dict[str, str]:
-    # as a heuristic, start with pypi mapping and sub out things
-    # that known to be incorrect; this doesn't handle channels ...
-    mapping = module_name_to_pypi_name()
-    mapping["cv2"] = "opencv"
-    mapping["ibis"] = "ibis-duckdb"
-    return mapping
+    global _CONDA_MAPPING
+    if _CONDA_MAPPING is None:
+        mapping = module_name_to_pypi_name().copy()
+        mapping["cv2"] = "opencv"
+        mapping["ibis"] = "ibis-duckdb"
+        _CONDA_MAPPING = mapping
+    return _CONDA_MAPPING
