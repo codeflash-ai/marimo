@@ -27,6 +27,35 @@ from marimo._utils.paths import marimo_package_path
 if TYPE_CHECKING:
     from starlette.requests import Request
 
+_SERVICE_WORKER_JS = """
+let notebookIdPromise = new Promise((resolve) => {
+    self.addEventListener('message', (event) => {
+        if (event.data.notebookId) {
+            resolve(event.data.notebookId);
+        }
+    });
+});
+
+self.addEventListener('fetch', function(event) {
+    if (event.request.url.includes('/public/')) {
+        event.respondWith(
+            notebookIdPromise.then(notebookId => {
+                return fetch(event.request.url, {
+                    headers: {
+                        'X-Notebook-Id': notebookId
+                    }
+                });
+            })
+        );
+    }
+});
+"""
+
+_SERVICE_WORKER_RESPONSE = Response(
+    content=_SERVICE_WORKER_JS,
+    media_type="application/javascript",
+)
+
 LOGGER = _loggers.marimo_logger()
 
 # Router for serving static assets
@@ -216,32 +245,8 @@ async def public_files_service_worker(request: Request) -> Response:
     Service worker that adds the notebook ID to the request headers.
     """
     del request
-    return Response(
-        content="""
-        let notebookIdPromise = new Promise((resolve) => {
-            self.addEventListener('message', (event) => {
-                if (event.data.notebookId) {
-                    resolve(event.data.notebookId);
-                }
-            });
-        });
-
-        self.addEventListener('fetch', function(event) {
-            if (event.request.url.includes('/public/')) {
-                event.respondWith(
-                    notebookIdPromise.then(notebookId => {
-                        return fetch(event.request.url, {
-                            headers: {
-                                'X-Notebook-Id': notebookId
-                            }
-                        });
-                    })
-                );
-            }
-        });
-        """,
-        media_type="application/javascript",
-    )
+    # Return the cached Response object for optimal efficiency
+    return _SERVICE_WORKER_RESPONSE
 
 
 @router.get("/public/{filepath:path}")
