@@ -52,21 +52,31 @@ def format_value(
 def format_row(
     row: dict[str, JSONType], format_mapping: FormatMapping
 ) -> dict[str, JSONType]:
-    # Return None if the format mapping is None
+    # Return original row if the format mapping is None
     if format_mapping is None:
         return row
-    # Apply formatting to each value in a row dictionary
-    return {
-        col: format_value(col, value, format_mapping)
-        for col, value in row.items()
-    }
+    # Produce the formatted row, avoiding function calls when not necessary
+    result = {}
+    for col, value in row.items():
+        # Check if this column needs formatting as per mapping
+        if col in format_mapping:
+            formatted_value = format_value(col, value, format_mapping)
+            result[col] = formatted_value
+        else:
+            result[col] = value
+    return result
 
 
 def format_column(
     col: str, values: list[JSONType], format_mapping: FormatMapping
 ) -> list[JSONType]:
-    # Return None if the format mapping is None
+    # Return original column if the format mapping is None
     if format_mapping is None:
         return values
-    # Apply formatting to each value in a column list
+    # Determine the formatter for the column once
+    formatter = format_mapping.get(col, None)
+    if formatter is None:
+        return values
+    # Only apply formatting if a formatter is present for the column
+    # Avoids formatting function call overhead if not needed
     return [format_value(col, value, format_mapping) for value in values]
