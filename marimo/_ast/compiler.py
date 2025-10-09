@@ -37,6 +37,8 @@ if sys.version_info < (3, 10):
 else:
     from typing import TypeAlias
 
+_CELL_ID_REGEX = re.compile(r"__marimo__cell_(.*?)_")
+
 LOGGER = _loggers.marimo_logger()
 Cls: TypeAlias = type
 
@@ -54,9 +56,9 @@ def code_key(code: str) -> int:
 
 def cell_id_from_filename(filename: str) -> Optional[CellId_t]:
     """Parse cell id from filename."""
-    matches = re.findall(r"__marimo__cell_(.*?)_", filename)
-    if matches:
-        return CellId_t(matches[0])
+    match = _CELL_ID_REGEX.search(filename)
+    if match:
+        return CellId_t(match.group(1))
     return None
 
 
