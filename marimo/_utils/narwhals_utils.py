@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Union, overload
+from typing import TYPE_CHECKING, Any, TypeGuard, Union, overload
 
 import narwhals as nw_main
 import narwhals.dtypes as nw_dtypes
@@ -21,6 +21,10 @@ else:
 if TYPE_CHECKING:
     from narwhals.typing import IntoDataFrame, IntoFrame, IntoLazyFrame
     from typing_extensions import TypeIs
+
+_NARWHALS_DF_TYPES = (nw.DataFrame, nw_main.DataFrame, nw1.DataFrame)
+
+_NARWHALS_LF_TYPES = (nw.LazyFrame, nw_main.LazyFrame, nw1.LazyFrame)
 
 
 @overload
@@ -144,9 +148,10 @@ def unwrap_narwhals_dataframe(df: Any) -> Any:
     """
     Unwrap a narwhals dataframe.
     """
-    if is_narwhals_dataframe(df):
+    # Inline type checks for efficiency
+    if isinstance(df, _NARWHALS_DF_TYPES):
         return df.to_native()  # type: ignore[return-value]
-    if is_narwhals_lazyframe(df):
+    if isinstance(df, _NARWHALS_LF_TYPES):
         return df.to_native()  # type: ignore[return-value]
     return df
 
