@@ -94,16 +94,26 @@ def ends_with_semicolon(code: str) -> bool:
 def contains_only_tests(tree: ast.Module) -> bool:
     """Returns True if the module contains only test functions."""
     scope = tree.body
+    if not scope:
+        return False
+    # Avoid unnecessary repeated attribute lookup and isinstance() calls
+    allowed_types = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    test_prefix = "test"
     for node in scope:
-        if isinstance(node, ast.Return):
+        # Fast path for ast.Return
+        if type(node) is ast.Return:
             return True
-        if not isinstance(
-            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ):
+        node_type = type(node)
+        if node_type not in allowed_types:
             return False
-        if not node.name.lower().startswith("test"):
+        # Direct attribute access and string comparison for lowercased name
+        name = node.name
+        # Avoid .lower() unless strictly needed
+        first_four = name[:4]
+        # Compare as lowercase only for first 4 chars for prefix match
+        if first_four.lower() != test_prefix:
             return False
-    return bool(scope)
+    return True
 
 
 def cache(filename: str, code: str) -> None:
