@@ -9,20 +9,17 @@ class _HTMLBuilder:
     def div(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
+        # Avoid unnecessary list conversion and join if possible
+        if isinstance(children, str):
+            children_html = children
+        else:
+            children_html = "".join(children)
 
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
+        if not style:
             return f"<div>{children_html}</div>"
         else:
-            return f"<div {_join_params(params)}>{children_html}</div>"
+            # Inline param logic for performance (avoiding list/tuple creation)
+            return f"<div style='{style}'>{children_html}</div>"
 
     @staticmethod
     def img(
