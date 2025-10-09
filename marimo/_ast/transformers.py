@@ -109,12 +109,9 @@ class NameTransformer(ast.NodeTransformer):
         super().__init__()
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
-        self.generic_visit(node)
         if node.id in self._name_substitutions:
             self.made_changes = True
-            return ast.Name(
-                **{**node.__dict__, "id": self._name_substitutions[node.id]}
-            )
+            return ast.Name(id=self._name_substitutions[node.id], ctx=node.ctx)
         return node
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
