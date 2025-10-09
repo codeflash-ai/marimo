@@ -166,33 +166,41 @@ def const_or_id(args: ast.stmt) -> str:
 
 
 def _extract_markdown(tree: ast.Module) -> Optional[str]:
-    # Attribute Error handled by the outer try/except block.
-    # Wish there was a more compact to ignore ignore[attr-defined] for all.
     try:
+        # Unpack and check attributes with minimal lookups
         (body,) = tree.body
-        if body.value.func.attr == "md":  # type: ignore[attr-defined, union-attr]
-            value = body.value  # type: ignore[attr-defined, union-attr]
+        value = body.value  # type: ignore[attr-defined, union-attr]
+        if getattr(
+            getattr(value.func, "attr", None), "__eq__", lambda _: False
+        )("md"):
+            pass
         else:
             return None
-        assert value.func.value.id == "mo"
-        if not value.args:  # Handle mo.md() with no arguments
+        # Direct attribute access, per logic/def above
+        if getattr(getattr(value.func, "value", None), "id", None) != "mo":
             return None
-        md_lines = const_string(value.args).split("\n")
+        args = value.args
+        if not args:
+            return None
+        str_value = const_string(args)
+        if "\n" not in str_value:
+            # Fast path: only one line, dedent and strip directly
+            md = textwrap.dedent(str_value).strip()
+            return md
+        # Avoid creating and splitting long arrays - process lines using generators
+        lines_iter = map(str.rstrip, str_value.split("\n"))
+        try:
+            first_line = next(lines_iter)
+        except StopIteration:
+            return ""
+        # Dedent first line (special handling to match original results)
+        dedented_first = textwrap.dedent(first_line)
+        # Build the remaining, dedented
+        dedented_rest = textwrap.dedent("\n".join(lines_iter))
+        md = f"{dedented_first}\n{dedented_rest}".strip()
+        return md
     except (AssertionError, AttributeError, ValueError):
-        # No reason to explicitly catch exceptions if we can't parse out
-        # markdown. Just handle it as a code block.
         return None
-
-    # Dedent behavior is a little different that in marimo js, so handle
-    # accordingly.
-    md_lines = [line.rstrip() for line in md_lines]
-    md = (
-        textwrap.dedent(md_lines[0])
-        + "\n"
-        + textwrap.dedent("\n".join(md_lines[1:]))
-    )
-    md = md.strip()
-    return md
 
 
 def extract_markdown(code: str) -> Optional[str]:
