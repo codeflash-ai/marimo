@@ -233,31 +233,47 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return DefaultTableManager(self.data[offset : offset + count])
 
     def search(self, query: str) -> DefaultTableManager:
-        query = query.lower()
-        if isinstance(self.data, dict) and self.is_column_oriented:
-            mask: list[bool] = [
-                any(
-                    query in str(cast(list[Any], self.data[key])[row]).lower()
-                    for key in self.data.keys()
-                )
-                for row in range(self.get_num_rows() or 0)
-            ]
+        query_lower = query.lower()
+        data = self.data  # Localize for perf
+        if isinstance(data, dict) and self.is_column_oriented:
+            keys = list(data.keys())
+            # Pre-cast once for each column for speed
+            values_cast: dict[str, list[Any]] = {
+                k: cast(list[Any], data[k]) for k in keys
+            }
+            num_rows = self.get_num_rows() or 0
+
+            # Optimize boolean mask
+            mask = [False] * num_rows
+            for row in range(num_rows):
+                match = False
+                for key in keys:
+                    cell = str(values_cast[key][row]).lower()
+                    if query_lower in cell:
+                        match = True
+                        break
+                mask[row] = match
+
+            # Build results using the mask, minimizing per-column loops
             results = {
                 key: [
-                    cast(list[Any], value)[i]
-                    for i, match in enumerate(mask)
-                    if match
+                    values_cast[key][i]
+                    for i, matched in enumerate(mask)
+                    if matched
                 ]
-                for key, value in self.data.items()
+                for key in keys
             }
             return DefaultTableManager(cast(JsonTableData, results))
-        return DefaultTableManager(
-            [
-                row
-                for row in self._normalize_data(self.data)
-                if any(query in str(v).lower() for v in row.values())
-            ]
-        )
+        # Non-column oriented fallback
+        normalized = self._normalize_data(data)
+        query_in_value = query_lower
+        # Reduce number of .lower() calls on each value
+        result_rows = [
+            row
+            for row in normalized
+            if any(query_in_value in str(v).lower() for v in row.values())
+        ]
+        return DefaultTableManager(result_rows)
 
     def get_row_headers(self) -> FieldTypes:
         return []
@@ -337,13 +353,14 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
     def get_num_rows(self, force: bool = True) -> int:
         del force
-        if isinstance(self.data, dict):
+        data = self.data
+        if isinstance(data, dict):
             if self.is_column_oriented:
-                first = next(iter(self.data.values()), None)
+                first = next(iter(data.values()), None)
                 return len(cast(list[Any], first))
             else:
-                return len(self.data)
-        return len(self.data)
+                return len(data)
+        return len(data)
 
     def get_num_columns(self) -> int:
         return len(self.data) if isinstance(self.data, dict) else 1
@@ -451,12 +468,9 @@ class DefaultTableManager(TableManager[JsonTableData]):
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
         if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
-            column_values = data.values()
             column_names = list(data.keys())
+            column_values = [data[name] for name in column_names]
+            # Avoid using .values() iterator to prevent repeated conversion
             return [
                 dict(zip(column_names, row_values))
                 for row_values in zip(*column_values)
@@ -466,28 +480,30 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if isinstance(data, dict):
             return [{KEY: key, VALUE: value} for key, value in data.items()]
 
-        # Assert that data is a list
+        # Assert that data is a list or tuple
         if not isinstance(data, (list, tuple)):
             raise ValueError(
                 "data must be a list or tuple or a dict of lists."
             )
 
         # Handle empty data
-        if len(data) == 0:
+        if not data:
             return []
 
-        # Handle single-column data
-        if not isinstance(data[0], dict):
-            if not isinstance(data[0], (str, int, float, bool, type(None))):
+        # Handle single-column data (sequence of scalar types)
+        first_entry = data[0]
+        if not isinstance(first_entry, dict):
+            if not isinstance(
+                first_entry, (str, int, float, bool, type(None))
+            ):
                 raise ValueError(
                     "data must be a sequence of JSON-serializable types, or a "
                     "sequence of dicts."
                 )
-
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
+            # Assume all entries are valid, cast once
             casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
             return [{"value": datum} for datum in casted]
+
         # Sequence of dicts
         return cast(list[dict[str, Any]], data)
 
