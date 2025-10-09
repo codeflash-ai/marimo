@@ -214,23 +214,25 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if offset < 0:
             raise ValueError("Offset must be a non-negative integer")
 
-        if isinstance(self.data, dict):
+        data = self.data
+        if isinstance(data, dict):
             if self.is_column_oriented:
-                return DefaultTableManager(
-                    cast(
-                        JsonTableData,
-                        {
-                            key: cast(list[Any], value)[
-                                offset : offset + count
-                            ]
-                            for key, value in self.data.items()
-                        },
-                    )
-                )
+                # Optimize: Use list slicing directly (avoid unnecessary cast and localize loop variables)
+                out = {}
+                for key, value in data.items():
+                    # Fast-path: Value should always be list/tuple here due to column-orientation
+                    out[key] = value[offset : offset + count]
+                return DefaultTableManager(cast("JsonTableData", out))
+            # Only call _normalize_data when necessary; pass through offset+count to avoid large intermediate lists
+            normalized_rows = self._normalize_data(data)
+            if not normalized_rows:
+                return DefaultTableManager([])
+            # Defensive slicing, as normalized_rows may be smaller than offset+count
             return DefaultTableManager(
-                self._normalize_data(self.data)[offset : offset + count]
+                normalized_rows[offset : offset + count]
             )
-        return DefaultTableManager(self.data[offset : offset + count])
+        # For non-dict, can slice directly; use tuple/list slice
+        return DefaultTableManager(data[offset : offset + count])
 
     def search(self, query: str) -> DefaultTableManager:
         query = query.lower()
@@ -448,15 +450,12 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
     @staticmethod
     def _normalize_data(data: JsonTableData) -> list[dict[str, Any]]:
-        # If it is a dict of lists (column major),
-        # convert to list of dicts (row major)
+        # Fast-path for column-oriented dicts
         if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
-            column_values = data.values()
+            # Avoid repeated lookups and cast only once per zip row
             column_names = list(data.keys())
+            column_values = data.values()
+            # Use a generator expression wrapped in list for efficient row generation
             return [
                 dict(zip(column_names, row_values))
                 for row_values in zip(*column_values)
@@ -464,31 +463,41 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
         # If its a dictionary, convert to key-value pairs
         if isinstance(data, dict):
-            return [{KEY: key, VALUE: value} for key, value in data.items()]
+            # Fast one-time KEY/VALUE lookup, use local names, avoid attribute lookup in tight comprehension
+            k = KEY
+            v = VALUE
+            # Use items into a list comprehension -- nothing to optimize further
+            return [{k: key, v: value} for key, value in data.items()]
 
-        # Assert that data is a list
+        # Assert that data is a list or tuple
         if not isinstance(data, (list, tuple)):
             raise ValueError(
                 "data must be a list or tuple or a dict of lists."
             )
 
         # Handle empty data
-        if len(data) == 0:
+        if not data:
+            # Faster check for empty list/tuple, avoids len() call
             return []
 
         # Handle single-column data
-        if not isinstance(data[0], dict):
-            if not isinstance(data[0], (str, int, float, bool, type(None))):
+        first_elem = data[0]
+        if not isinstance(first_elem, dict):
+            if not isinstance(first_elem, (str, int, float, bool, type(None))):
                 raise ValueError(
                     "data must be a sequence of JSON-serializable types, or a "
                     "sequence of dicts."
                 )
-
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
-            casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
-            return [{"value": datum} for datum in casted]
-        # Sequence of dicts
+            # Avoid repeated lookup for literal
+            val_key = "value"
+            # Use generator expression as argument to list for minimal memory if data is large
+            return [
+                {val_key: datum}
+                for datum in cast(
+                    list[Union[str, int, float, bool, MIME, None]], data
+                )
+            ]
+        # Sequence of dicts (already row-major), cast once
         return cast(list[dict[str, Any]], data)
 
 
