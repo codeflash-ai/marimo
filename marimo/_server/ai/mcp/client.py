@@ -720,6 +720,9 @@ class MCPClient:
         """
         from mcp.types import Tool  # type: ignore[import-not-found]
 
+        # Caches result of MCP dependency availability
+        _MCP_DEPENDENCY_AVAILABLE: bool | None = None
+
         server_name = connection.definition.name
 
         for tool in tools:
@@ -877,16 +880,18 @@ def get_mcp_client() -> MCPClient:
     Note: The client must be configured using await client.configure(config)
           before connecting to servers.
     """
-    global _MCP_CLIENT
+    global _MCP_CLIENT, _MCP_DEPENDENCY_AVAILABLE
     if _MCP_CLIENT is None:
-        if not DependencyManager.mcp.has():
+        # Cache the result of DependencyManager.mcp.has()
+        if _MCP_DEPENDENCY_AVAILABLE is None:
+            _MCP_DEPENDENCY_AVAILABLE = DependencyManager.mcp.has()
+        if not _MCP_DEPENDENCY_AVAILABLE:
             msg = "MCP dependencies not available. Install with `pip install marimo[mcp]` or `uv add marimo[mcp]`"
             LOGGER.info(msg)
             raise ModuleNotFoundError(
                 msg,
                 name="mcp",
             )
-
         _MCP_CLIENT = MCPClient()
         LOGGER.info("MCP client initialized")
     return _MCP_CLIENT
