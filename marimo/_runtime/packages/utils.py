@@ -46,11 +46,7 @@ def is_python_isolated() -> bool:
 
 def append_version(pkg_name: str, version: Optional[str]) -> str:
     """Qualify a version string with a leading '==' if it doesn't have one"""
-    if version is None:
-        return pkg_name
-    if version == "":
-        return pkg_name
-    if version == "latest":
+    if not version or version == "latest":
         return pkg_name
     return f"{pkg_name}=={version}"
 
