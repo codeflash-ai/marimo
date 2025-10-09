@@ -53,7 +53,14 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
     def __init__(self, data: JsonTableData):
         self.data = data
+        # Precompute column orientation and, if column-oriented, cache its length.
         self.is_column_oriented = _is_column_oriented(data)
+        self._col_oriented_length: int | None = None
+        if isinstance(self.data, dict) and self.is_column_oriented:
+            first = next(iter(self.data.values()), None)
+            # Cache the length only if a first column exists (non-empty dict)
+            if first is not None:
+                self._col_oriented_length = len(cast(list[Any], first))
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -339,6 +346,9 @@ class DefaultTableManager(TableManager[JsonTableData]):
         del force
         if isinstance(self.data, dict):
             if self.is_column_oriented:
+                # Use the precomputed length if available
+                if self._col_oriented_length is not None:
+                    return self._col_oriented_length
                 first = next(iter(self.data.values()), None)
                 return len(cast(list[Any], first))
             else:
