@@ -309,11 +309,11 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return []
 
     def _as_table_manager(self) -> TableManager[Any]:
-        if DependencyManager.pandas.has():
+        if self._has_pandas():
             import pandas as pd
 
             return PandasTableManagerFactory.create()(pd.DataFrame(self.data))
-        if DependencyManager.polars.has():
+        if self._has_polars():
             import polars as pl
 
             if isinstance(self.data, dict) and not self.is_column_oriented:
@@ -490,6 +490,16 @@ class DefaultTableManager(TableManager[JsonTableData]):
             return [{"value": datum} for datum in casted]
         # Sequence of dicts
         return cast(list[dict[str, Any]], data)
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _has_pandas() -> bool:
+        return DependencyManager.pandas.has()
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _has_polars() -> bool:
+        return DependencyManager.polars.has()
 
 
 def _is_column_oriented(data: JsonTableData) -> bool:
