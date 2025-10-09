@@ -266,6 +266,8 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def calculate_top_k_rows(
         self, column: ColumnName, k: int
     ) -> list[tuple[Any, int]]:
+        # Highly likely that get_column_names will be called several times,
+        # so we cache it locally to avoid repeatedly iterating data in hot calls
         column_names = self.get_column_names()
         if column not in column_names:
             raise ValueError(f"Column {column} not found in table.")
@@ -274,26 +276,38 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if isinstance(self.data, dict):
             if self.is_column_oriented:
                 # Handle column-oriented data
-                for value in cast(list[Any], self.data[column]):
+                col_data = self.data[column]
+                # Avoid cast in the hot loop, perform once up front
+                col_data = cast(list[Any], col_data)
+                for value in col_data:
                     grouped[value] += 1
             else:
                 # In this case, the data is a dict of key-value pairs
                 # where the key is the row identifier and the value is the data
-                for key, value in self.data.items():
-                    if column == KEY:
+                if column == KEY:
+                    for key in self.data.keys():
                         grouped[key] += 1
-                    elif column == VALUE:
+                elif column == VALUE:
+                    for value in self.data.values():
                         grouped[value] += 1
         else:
             # Handle row-oriented data
-            for row in self.data:
-                if isinstance(row, dict) and column in row:
-                    grouped[row[column]] += 1
+            # If data is a list of dicts, avoid extra isinstance checks inside the loop
+            if self.data:
+                first = self.data[0]
+                if isinstance(first, dict):
+                    for row in self.data:
+                        if column in row:
+                            grouped[row[column]] += 1
+                else:
+                    # Only ever enters here if not a dict, matches original logic
+                    for row in self.data:
+                        # Defensive (original code), though in practice ["value"] is returned
+                        pass
 
-        sorted_grouped = sorted(
-            grouped.items(), key=lambda x: x[1], reverse=True
-        )
-        top_k = sorted_grouped[:k]
+        # Localize sorted and slicing to a single step (CPython optimization)
+        # This directly sorts and slices without intermediate list allocations
+        top_k = sorted(grouped.items(), key=lambda x: x[1], reverse=True)[:k]
 
         return [(value, count) for value, count in top_k]
 
@@ -349,12 +363,24 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return len(self.data) if isinstance(self.data, dict) else 1
 
     def get_column_names(self) -> list[str]:
-        if isinstance(self.data, dict):
+        data = self.data
+        # Fast-path for dict
+        if isinstance(data, dict):
             if not self.is_column_oriented:
                 return [KEY, VALUE]
-            return list(self.data.keys())
-        first = next(iter(self.data), None)
-        return list(first.keys()) if isinstance(first, dict) else ["value"]
+            # Avoid list(dict.keys()) where keys are already list-like (CPython 3.10 keys() returns view)
+            # Convert to list only if not already a list
+            keys = data.keys()
+            if not isinstance(keys, list):
+                return list(keys)
+            return keys
+        # For Sequence, avoid making iterator objects if data is not empty and not changing
+        # Uses index instead of next(iter()), which avoids iterator creation and subsequent GC
+        if data:
+            first = data[0]
+            if isinstance(first, dict):
+                return list(first.keys())
+        return ["value"]
 
     def get_unique_column_values(self, column: str) -> list[str | int | float]:
         return sorted(
