@@ -210,20 +210,17 @@ class _HTMLBuilder:
     def span(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
-            return f"<span>{children_html}</span>"
+        # Avoid list creation if possible
+        if isinstance(children, str):
+            children_html = children
         else:
+            children_html = "".join(children)
+
+        if style:
+            params = [("style", style)]
             return f"<span {_join_params(params)}>{children_html}</span>"
+        else:
+            return f"<span>{children_html}</span>"
 
     @staticmethod
     def table(
@@ -303,10 +300,10 @@ class _HTMLBuilder:
 
 
 def _join_params(params: list[tuple[str, Union[str, None]]]) -> str:
-    # Filter None
-    params = [(k, v) for k, v in params if v is not None]
-
-    return " ".join([f"{k}='{v}'" if v != "" else f"{k}" for k, v in params])
+    # Filter None efficiently and avoid unnecessary list allocations
+    return " ".join(
+        f"{k}='{v}'" if v != "" else f"{k}" for k, v in params if v is not None
+    )
 
 
 h = _HTMLBuilder()
