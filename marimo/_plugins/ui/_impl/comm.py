@@ -52,6 +52,9 @@ class MarimoCommManager:
 
         comm.handle_msg(cast(Msg, msg))
 
+    def __init__(self):
+        self.comms: dict = {}
+
 
 Msg = dict[str, Any]
 MsgCallback = Callable[[Msg], None]
