@@ -450,49 +450,62 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def _normalize_data(data: JsonTableData) -> list[dict[str, Any]]:
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
-        if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
-            column_values = data.values()
-            column_names = list(data.keys())
-            return [
-                dict(zip(column_names, row_values))
-                for row_values in zip(*column_values)
-            ]
-
-        # If its a dictionary, convert to key-value pairs
         if isinstance(data, dict):
+            col_oriented = _is_column_oriented(data)
+            if col_oriented:
+                # Fast path: convert dict of lists/tuples to row dicts
+                # No redundant list() conversion of keys/values inside the loop.
+                column_names = list(data.keys())
+                # Using tuple of lists for zip performance
+                column_values = tuple(data.values())
+                # Preallocate output list for speed if possible
+                # Unnecessary: use list comprehension for both readability and speed
+                return [
+                    dict(zip(column_names, row_values))
+                    for row_values in zip(*column_values)
+                ]
+
+            # If its a dictionary, convert to key-value pairs
+            # micro-optimization: Pull KEY and VALUE constant from module
+            # Do not inline list comprehension to generator, b/c lists are required
             return [{KEY: key, VALUE: value} for key, value in data.items()]
 
-        # Assert that data is a list
+        # Not a dict: ensure list or tuple
         if not isinstance(data, (list, tuple)):
             raise ValueError(
                 "data must be a list or tuple or a dict of lists."
             )
 
         # Handle empty data
-        if len(data) == 0:
+        # Fast return to avoid accessing data[0]
+        if not data:
             return []
 
         # Handle single-column data
-        if not isinstance(data[0], dict):
-            if not isinstance(data[0], (str, int, float, bool, type(None))):
+        first_elem = data[0]
+        if not isinstance(first_elem, dict):
+            if not isinstance(first_elem, (str, int, float, bool, type(None))):
                 raise ValueError(
                     "data must be a sequence of JSON-serializable types, or a "
                     "sequence of dicts."
                 )
+            # Skip cast, as it's a no-op at runtime and list(..) is not needed
+            # Could use generator but must preserve list result type
+            return [{"value": datum} for datum in data]
 
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
-            casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
-            return [{"value": datum} for datum in casted]
         # Sequence of dicts
+        # If we get here, data is list[dict[str, Any]]
+        # Cast should be a no-op at runtime
         return cast(list[dict[str, Any]], data)
 
 
 def _is_column_oriented(data: JsonTableData) -> bool:
-    return isinstance(data, dict) and all(
-        isinstance(value, (list, tuple)) for value in data.values()
-    )
+    # Use tuple short-circuit to avoid evaluating all() early if non-dict
+    if not isinstance(data, dict):
+        return False
+    # Convert values() to tuple for optimal repeated zip and so values are re-usable
+    # Use for-loop instead of all() to elide generator overhead
+    for value in data.values():
+        if not isinstance(value, (list, tuple)):
+            return False
+    return True
