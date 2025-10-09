@@ -120,7 +120,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
             # Column major data
             if self.is_column_oriented:
                 new_data: dict[Any, Any] = {
-                    key: [cast(list[JSONType], value)[i] for i in indices]
+                    key: [value[i] for i in indices]
                     for key, value in self.data.items()
                 }
                 return DefaultTableManager(new_data)
