@@ -32,9 +32,11 @@ def is_submodule(src_name: str, target_name: str) -> bool:
     """
     src_parts = src_name.split(".")
     target_parts = target_name.split(".")
-    if len(src_parts) > len(target_parts):
+    src_len = len(src_parts)
+    if src_len > len(target_parts):
         return False
-    return all(src_parts[i] == target_parts[i] for i in range(len(src_parts)))
+    # Use slice and compare lists directly for efficiency
+    return src_parts == target_parts[:src_len]
 
 
 def _depends_on(
