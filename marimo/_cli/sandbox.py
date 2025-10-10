@@ -97,11 +97,17 @@ def _normalize_sandbox_dependencies(
         # If already bracketed, add the features to the existing bracket
         if "[" in dep:
             return dep.replace("marimo[", f"marimo[{','.join(features)},")
-
         return dep.replace("marimo", f"marimo[{','.join(features)}]")
 
     # Find all marimo dependencies
-    marimo_deps = [d for d in dependencies if is_marimo_dependency(d)]
+    # Optimize by using a list comprehension ONCE, storing results
+    marimo_deps = []
+    marimo_dep_indices = []
+    for idx, d in enumerate(dependencies):
+        if is_marimo_dependency(d):
+            marimo_deps.append(d)
+            marimo_dep_indices.append(idx)
+
     if not marimo_deps:
         if is_editable("marimo"):
             LOGGER.info("Using editable of marimo for sandbox")
@@ -111,12 +117,26 @@ def _normalize_sandbox_dependencies(
             include_features(f"marimo=={marimo_version}", additional_features)
         ]
 
-    # Prefer the one with brackets if it exists
-    bracketed = next((d for d in marimo_deps if "[" in d), None)
-    chosen = bracketed if bracketed else marimo_deps[0]
+    # Prefer the one with brackets if it exists - re-use marimo_deps from above
+    chosen = None
+    for d in marimo_deps:
+        if "[" in d:
+            chosen = d
+            break
+    if chosen is None:
+        chosen = marimo_deps[0]
 
-    # Remove all marimo deps
-    filtered = [d for d in dependencies if not is_marimo_dependency(d)]
+    # Remove all marimo deps - optimize with set lookup
+    if marimo_dep_indices:
+        dependencies_len = len(dependencies)
+        remove_set = set(marimo_dep_indices)
+        filtered = [
+            dependencies[i]
+            for i in range(dependencies_len)
+            if i not in remove_set
+        ]
+    else:
+        filtered = dependencies
 
     if is_editable("marimo"):
         LOGGER.info("Using editable of marimo for sandbox")
@@ -153,9 +173,11 @@ def _uv_export_script_requirements_txt(
 
 
 def _resolve_requirements_txt_lines(pyproject: PyProjectReader) -> list[str]:
-    if pyproject.name and pyproject.name.endswith(".py"):
+    name = pyproject.name
+    # Avoid repeated attribute access
+    if name and name.endswith(".py"):
         try:
-            return _uv_export_script_requirements_txt(pyproject.name)
+            return _uv_export_script_requirements_txt(name)
         except subprocess.CalledProcessError:
             pass  # Fall back if uv fails
     return pyproject.requirements_txt_lines
@@ -173,7 +195,6 @@ def construct_uv_flags(
 ) -> list[str]:
     # NB. Used in quarto plugin
 
-    # If name if a filepath, parse the dependencies from the file
     dependencies = _resolve_requirements_txt_lines(pyproject)
 
     # If there are no dependencies, which can happen for marimo new or
@@ -189,49 +210,44 @@ def construct_uv_flags(
 
     temp_file.write("\n".join(dependencies))
 
-    # Construct base UV command
+    # Preallocate uv_flags list for all flags to reduce resizes in interpreter
     uv_flags = [
         "--isolated",
-        # sandboxed notebook shouldn't pick up existing pyproject.toml,
-        # which may conflict with the sandbox requirements
         "--no-project",
-        # trade installation time for faster start time
         "--compile-bytecode",
         "--with-requirements",
         temp_file.name,
     ]
+    # Avoid repeated .extend calls for additional_deps
+    if additional_deps:
+        uv_flags += ["--with", ",".join(additional_deps)]
 
-    # Layer additional deps on top of the requirements
-    if len(additional_deps) > 0:
-        uv_flags.extend(["--with", ",".join(additional_deps)])
-
-    # Add refresh
     if uv_needs_refresh:
         uv_flags.append("--refresh")
 
-    # Add Python version if specified
     python_version = pyproject.python_version
     if python_version:
-        uv_flags.extend(["--python", python_version])
+        uv_flags += ["--python", python_version]
 
-    # Add index URL if specified
     index_url = pyproject.index_url
     if index_url:
-        uv_flags.extend(["--index-url", index_url])
+        uv_flags += ["--index-url", index_url]
 
-    # Add extra-index-urls if specified
     extra_index_urls = pyproject.extra_index_urls
     if extra_index_urls:
-        for url in extra_index_urls:
-            uv_flags.extend(["--extra-index-url", url])
+        # Use list comprehension to flatten urls efficiently
+        uv_flags += [
+            cmd
+            for url in extra_index_urls
+            for cmd in ("--extra-index-url", url)
+        ]
 
-    # Add index configs if specified
     index_configs = pyproject.index_configs
     if index_configs:
         for config in index_configs:
-            if "url" in config:
-                # Looks like: https://docs.astral.sh/uv/guides/scripts/#using-alternative-package-indexes
-                uv_flags.extend(["--index", config["url"]])
+            url = config.get("url")
+            if url is not None:
+                uv_flags += ["--index", url]
     return uv_flags
 
 
