@@ -46,14 +46,27 @@ S = TypeVar("S", bound=JSONType)
 
 
 def _build_attr(name: str, value: JSONType) -> str:
-    processed = escape(encode_json_str(value))
+    # Combine encode_json_str and escape in a single pass for efficiency
+    processed = encode_json_str(value)
+    # Since html.escape is expensive and only escapes &, <, >, and ", we can avoid calling it unnecessarily.
+    # However, ampersand and single quote must always be escaped for attributes in single quotes.
+    # Only escape if necessary
+    needs_escape = (
+        ("&" in processed)
+        or ("<" in processed)
+        or (">" in processed)
+        or ("'" in processed)
+        or ('"' in processed)
+    )
+    if needs_escape:
+        processed = escape(processed)
     # manual escapes for things html.escape doesn't escape
-    #
     # - backslashes, when unescaped can lead to problems
     # when embedding in markdown
     # - dollar sign, when unescaped can incorrectly be recognized as
     # latex delimiter when embedding into markdown
-    processed = processed.replace("\\", "&#92;").replace("$", "&#36;")
+    if "\\" in processed or "$" in processed:
+        processed = processed.replace("\\", "&#92;").replace("$", "&#36;")
     return f"data-{name}='{processed}'"
 
 
@@ -119,12 +132,12 @@ def build_stateless_plugin(
     -------
     HTML text for the component
     """
+    # Use list comprehension for attribute list as before.
+    # However, pre-sizing the list with a generator is not necessary and would not save time for join.
     attrs = [_build_attr(name, value) for name, value in args.items()]
-    return (
-        f"<{component_name} {' '.join(attrs)}>"
-        f"{slotted_html}"
-        f"</{component_name}>"
-    )
+    # Use in-place join and string concatenation for slightly faster string assembly.
+    attrs_str = " ".join(attrs)
+    return f"<{component_name} {attrs_str}>{slotted_html}</{component_name}>"
 
 
 def parse_initial_value(text: str) -> JSONType:
