@@ -24,6 +24,9 @@ from marimo._utils.uv import find_uv_bin
 from marimo._utils.versions import is_editable
 from marimo._version import __version__
 
+# Cache the uv binary path to avoid repeated environment lookup in hot path
+_UV_BIN: str = find_uv_bin()
+
 LOGGER = _loggers.marimo_logger()
 
 DepFeatures = Literal["lsp", "recommended"]
@@ -135,9 +138,11 @@ def _uv_export_script_requirements_txt(
     if not name:
         return []
 
+    # Avoid repeated find_uv_bin() calls by reusing _UV_BIN
+    # Also optimize split('\n') to splitlines(), which avoids creating a trailing empty string for terminal newline
     result = subprocess.run(
         [
-            find_uv_bin(),
+            _UV_BIN,
             "export",
             "--no-hashes",
             "--no-annotate",
@@ -149,13 +154,14 @@ def _uv_export_script_requirements_txt(
         capture_output=True,
         text=True,
     )
-    return result.stdout.split("\n")
+    return result.stdout.splitlines()
 
 
 def _resolve_requirements_txt_lines(pyproject: PyProjectReader) -> list[str]:
-    if pyproject.name and pyproject.name.endswith(".py"):
+    name = pyproject.name
+    if name and name.endswith(".py"):
         try:
-            return _uv_export_script_requirements_txt(pyproject.name)
+            return _uv_export_script_requirements_txt(name)
         except subprocess.CalledProcessError:
             pass  # Fall back if uv fails
     return pyproject.requirements_txt_lines
