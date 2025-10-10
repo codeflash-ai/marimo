@@ -113,9 +113,9 @@ class LocalFileReader(FileReader):
 
 class GitHubIssueReader(FileReader):
     def can_read(self, name: str) -> bool:
-        return is_url(name) and name.startswith(
+        return name.startswith(
             "https://github.com/marimo-team/marimo/issues/"
-        )
+        ) and is_url(name)
 
     def read(self, name: str) -> tuple[str, str]:
         issue_number = name.split("/")[-1]
