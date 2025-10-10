@@ -191,10 +191,10 @@ def _get_secure() -> bool:
 
 def _get_remote_url() -> str:
     request = app_meta().request
-    if not request:
-        return ""
-
-    base_url = request.headers.get("x-runtime-url")
+    base_url = None
+    if request is not None:
+        # Only try to get base_url if request is present
+        base_url = request.headers.get("x-runtime-url")
     if not base_url:
         return ""
     return base_url.rstrip("/")
