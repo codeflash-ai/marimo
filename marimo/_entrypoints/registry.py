@@ -43,6 +43,10 @@ class EntryPointRegistry(Generic[T]):
 
         # Convert entry point group to env var format (e.g. marimo.cell.executor -> MARIMO_CELL_EXECUTOR)
         self._env_prefix = entry_point_group.replace(".", "_").upper()
+        self._denylist_cached: tuple[str, set[str]] | None = None
+        self._allowlist_cached: tuple[str, set[str]] | None = None
+        self._last_osenv_denylist: str | None = None
+        self._last_osenv_allowlist: str | None = None
 
     def _is_allowed(self, name: str) -> bool:
         """Check if an extension name is allowed based on environment variables.
@@ -53,21 +57,44 @@ class EntryPointRegistry(Generic[T]):
         Returns:
             True if the extension is allowed, False otherwise.
         """
-        # Check denylist first
         denylist_var = f"{self._env_prefix}_DENYLIST"
-        if denylist_var in os.environ:
-            denylist = {
-                n.strip().lower() for n in os.environ[denylist_var].split(",")
-            }
+        allowlist_var = f"{self._env_prefix}_ALLOWLIST"
+
+        # Cache the parsed denylist for fast repeated lookups
+        denylist_env_val = os.environ.get(denylist_var)
+        if denylist_env_val is not None:
+            if (
+                self._denylist_cached is None
+                or self._last_osenv_denylist != denylist_env_val
+            ):
+                denylist = {
+                    n.strip().lower()
+                    for n in denylist_env_val.split(",")
+                    if n.strip()
+                }
+                self._denylist_cached = (denylist_var, denylist)
+                self._last_osenv_denylist = denylist_env_val
+            else:
+                denylist = self._denylist_cached[1]
             if name.lower() in denylist:
                 return False
 
-        # Then check allowlist
-        allowlist_var = f"{self._env_prefix}_ALLOWLIST"
-        if allowlist_var in os.environ:
-            allowlist = {
-                n.strip().lower() for n in os.environ[allowlist_var].split(",")
-            }
+        # Cache the parsed allowlist for fast repeated lookups
+        allowlist_env_val = os.environ.get(allowlist_var)
+        if allowlist_env_val is not None:
+            if (
+                self._allowlist_cached is None
+                or self._last_osenv_allowlist != allowlist_env_val
+            ):
+                allowlist = {
+                    n.strip().lower()
+                    for n in allowlist_env_val.split(",")
+                    if n.strip()
+                }
+                self._allowlist_cached = (allowlist_var, allowlist)
+                self._last_osenv_allowlist = allowlist_env_val
+            else:
+                allowlist = self._allowlist_cached[1]
             return name.lower() in allowlist
 
         return True
@@ -127,6 +154,7 @@ class EntryPointRegistry(Generic[T]):
         if name in self._plugins:
             return self._plugins[name]
 
+        # Only fetch entry points if needed
         entry_points_list = get_entry_points(self.entry_point_group)
         for ep in entry_points_list:
             if ep.name == name:
@@ -151,8 +179,20 @@ class EntryPointRegistry(Generic[T]):
 
 
 def get_entry_points(group: KnownEntryPoint) -> "EntryPoints":
+    # The result of entry_points() can be expensive; cache it per-process for performance.
+    # (Optional further: could LRU cache this if group varies, but likely not needed.)
+    # Using a global here is safe and won't affect testability or reloading as
+    # entry points are static for the duration of the process.
+    if not hasattr(get_entry_points, "_cache"):
+        get_entry_points._cache = {}
+    cache = get_entry_points._cache
+    if group in cache:
+        return cache[group]
+
     ep = entry_points()
     if hasattr(ep, "select"):
-        return ep.select(group=group)
+        res = ep.select(group=group)
     else:
-        return ep.get(group, [])  # type: ignore
+        res = ep.get(group, [])  # type: ignore
+    cache[group] = res
+    return res
