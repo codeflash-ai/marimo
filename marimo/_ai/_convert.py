@@ -61,12 +61,17 @@ def get_openai_messages_from_parts(
     parts: list[ChatPart],
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
+    append = messages.append  # Local name for slightly faster method access
+    text_type = TextPart
+    tool_type = ToolInvocationPart
+
     for part in parts:
-        if isinstance(part, TextPart):
-            message = {"role": role, "content": part.text}
-            messages.append(message)
-        elif isinstance(part, ToolInvocationPart):
+        # Minimize isinstance checks by precalculating type
+        if type(part) is text_type:
+            append({"role": role, "content": part.text})
+        elif type(part) is tool_type:
             # Create two messages for the tool result
+            input_str = str(part.input) if part.input else "{}"
             assistant_message = {
                 "role": role,
                 "content": None,
@@ -76,21 +81,20 @@ def get_openai_messages_from_parts(
                         "type": "function",
                         "function": {
                             "name": part.tool_name,
-                            "arguments": str(part.input)
-                            if part.input
-                            else "{}",
+                            "arguments": input_str,
                         },
                     }
                 ],
             }
-            messages.append(assistant_message)
+            append(assistant_message)
             tool_result_message = {
                 "role": "tool",
                 "tool_call_id": part.tool_call_id,
                 "name": part.tool_name,
                 "content": str(part.output),
             }
-            messages.append(tool_result_message)
+            append(tool_result_message)
+        # If other types exist, skip them -- behavior preserved
     return messages
 
 
