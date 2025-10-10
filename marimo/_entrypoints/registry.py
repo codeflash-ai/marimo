@@ -44,6 +44,14 @@ class EntryPointRegistry(Generic[T]):
         # Convert entry point group to env var format (e.g. marimo.cell.executor -> MARIMO_CELL_EXECUTOR)
         self._env_prefix = entry_point_group.replace(".", "_").upper()
 
+        # Optimization: cache denylist and allowlist env values and sets
+        self._denylist_env_var = f"{self._env_prefix}_DENYLIST"
+        self._allowlist_env_var = f"{self._env_prefix}_ALLOWLIST"
+        self._denylist_raw: str | None = None
+        self._denylist: set[str] | None = None
+        self._allowlist_raw: str | None = None
+        self._allowlist: set[str] | None = None
+
     def _is_allowed(self, name: str) -> bool:
         """Check if an extension name is allowed based on environment variables.
 
@@ -53,22 +61,32 @@ class EntryPointRegistry(Generic[T]):
         Returns:
             True if the extension is allowed, False otherwise.
         """
-        # Check denylist first
-        denylist_var = f"{self._env_prefix}_DENYLIST"
-        if denylist_var in os.environ:
-            denylist = {
-                n.strip().lower() for n in os.environ[denylist_var].split(",")
-            }
-            if name.lower() in denylist:
+        # -- Denylist
+        denylist_raw, denylist = self._get_list_from_env(
+            self._denylist_env_var, self._denylist_raw, self._denylist
+        )
+        if denylist_raw is not None:
+            if denylist_raw != self._denylist_raw:
+                # env changed or first-use; cache update
+                self._denylist_raw = denylist_raw
+                self._denylist = denylist
+            else:
+                denylist = self._denylist
+            if denylist is not None and name.lower() in denylist:
                 return False
 
-        # Then check allowlist
-        allowlist_var = f"{self._env_prefix}_ALLOWLIST"
-        if allowlist_var in os.environ:
-            allowlist = {
-                n.strip().lower() for n in os.environ[allowlist_var].split(",")
-            }
-            return name.lower() in allowlist
+        # -- Allowlist
+        allowlist_raw, allowlist = self._get_list_from_env(
+            self._allowlist_env_var, self._allowlist_raw, self._allowlist
+        )
+        if allowlist_raw is not None:
+            if allowlist_raw != self._allowlist_raw:
+                # env changed or first-use; cache update
+                self._allowlist_raw = allowlist_raw
+                self._allowlist = allowlist
+            else:
+                allowlist = self._allowlist
+            return allowlist is not None and name.lower() in allowlist
 
         return True
 
@@ -148,6 +166,23 @@ class EntryPointRegistry(Generic[T]):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(group={self.entry_point_group!r}, registered={self.names()!r})"
+
+    def _get_list_from_env(
+        self, varname: str, cached_raw: str | None, cached_set: set[str] | None
+    ) -> tuple[str | None, set[str] | None]:
+        # Helper to cache parsed set from env var, refresh if env changes
+        value = os.environ.get(varname)
+        if value is None:
+            return None, None
+        if value == cached_raw:
+            return cached_raw, cached_set
+        # Note: skip empty string case for perf (env set but empty)
+        s = (
+            {n.strip().lower() for n in value.split(",")}
+            if value.strip()
+            else set()
+        )
+        return value, s
 
 
 def get_entry_points(group: KnownEntryPoint) -> "EntryPoints":
