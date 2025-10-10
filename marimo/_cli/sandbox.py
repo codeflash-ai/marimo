@@ -97,11 +97,17 @@ def _normalize_sandbox_dependencies(
         # If already bracketed, add the features to the existing bracket
         if "[" in dep:
             return dep.replace("marimo[", f"marimo[{','.join(features)},")
-
         return dep.replace("marimo", f"marimo[{','.join(features)}]")
 
-    # Find all marimo dependencies
-    marimo_deps = [d for d in dependencies if is_marimo_dependency(d)]
+    # Single pass: Collect marimo_deps and filtered in one go
+    marimo_deps = []
+    filtered = []
+    for d in dependencies:
+        if is_marimo_dependency(d):
+            marimo_deps.append(d)
+        else:
+            filtered.append(d)
+
     if not marimo_deps:
         if is_editable("marimo"):
             LOGGER.info("Using editable of marimo for sandbox")
@@ -114,9 +120,6 @@ def _normalize_sandbox_dependencies(
     # Prefer the one with brackets if it exists
     bracketed = next((d for d in marimo_deps if "[" in d), None)
     chosen = bracketed if bracketed else marimo_deps[0]
-
-    # Remove all marimo deps
-    filtered = [d for d in dependencies if not is_marimo_dependency(d)]
 
     if is_editable("marimo"):
         LOGGER.info("Using editable of marimo for sandbox")

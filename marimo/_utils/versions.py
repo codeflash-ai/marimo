@@ -9,9 +9,8 @@ def is_editable(pkg_name: str) -> bool:
     """Check if a package is an editable install"""
 
     try:
-        direct_url = Distribution.from_name(pkg_name).read_text(
-            "direct_url.json"
-        )
+        dist = Distribution.from_name(pkg_name)
+        direct_url = dist.read_text("direct_url.json")
     except Exception:
         return False
 

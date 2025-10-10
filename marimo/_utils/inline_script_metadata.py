@@ -9,6 +9,8 @@ from marimo import _loggers
 from marimo._cli.file_path import FileContentReader
 from marimo._utils.scripts import read_pyproject_from_script
 
+_VERSION_SPLIT_PATTERN = re.compile(r"[=<>~]+")
+
 LOGGER = _loggers.marimo_logger()
 
 
@@ -202,7 +204,7 @@ def _pyproject_toml_to_requirements_txt(
 
 def is_marimo_dependency(dependency: str) -> bool:
     # Split on any version specifier
-    without_version = re.split(r"[=<>~]+", dependency)[0]
+    without_version = _VERSION_SPLIT_PATTERN.split(dependency)[0]
     # Match marimo and marimo[extras], but not marimo-<something-else>
     return without_version == "marimo" or without_version.startswith("marimo[")
 
