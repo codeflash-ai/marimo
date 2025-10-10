@@ -16,6 +16,8 @@ from marimo._messaging.msgspec_encoder import encode_json_str
 from marimo._output.md import _md
 from marimo._output.mime import MIME
 
+_INITIAL_VALUE_RE = re.compile(r"data-initial-value='(.*?)'")
+
 if TYPE_CHECKING:
     import sys
     from collections.abc import Mapping, Sequence
@@ -129,7 +131,7 @@ def build_stateless_plugin(
 
 def parse_initial_value(text: str) -> JSONType:
     """Get initial value from HTML for a UI element."""
-    match = re.search("data-initial-value='(.*?)'", text)
+    match = _INITIAL_VALUE_RE.search(text)
     if match is None:
         raise ValueError("Invalid component HTML: ", text)
-    return cast(JSONType, json.loads(unescape(match.groups()[0])))
+    return cast(JSONType, json.loads(unescape(match.group(1))))
