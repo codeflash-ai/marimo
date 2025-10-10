@@ -10,7 +10,8 @@ class CellIdGenerator:
     def __init__(self, prefix: str = "") -> None:
         self.prefix = prefix
         self.random_seed = random.Random(42)
-        self.seen_ids: set[CellId_t] = set()
+        # Store raw strings for efficiency in lookup/add
+        self.seen_ids: set[str] = set()
 
     def create_cell_id(self) -> CellId_t:
         """Create a new unique cell ID.
@@ -25,7 +26,7 @@ class CellIdGenerator:
                 self.random_seed.choices(string.ascii_letters, k=4)
             )
             if _id not in self.seen_ids:
-                self.seen_ids.add(CellId_t(_id))
+                self.seen_ids.add(_id)
                 return CellId_t(_id)
             attempts += 1
 
