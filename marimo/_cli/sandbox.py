@@ -76,7 +76,14 @@ def maybe_prompt_run_in_sandbox(name: str | None) -> bool:
 
 
 def _is_versioned(dependency: str) -> bool:
-    return any(c in dependency for c in ("==", ">=", "<=", ">", "<", "~"))
+    return (
+        "==" in dependency
+        or ">=" in dependency
+        or "<=" in dependency
+        or ">" in dependency
+        or "<" in dependency
+        or "~" in dependency
+    )
 
 
 def _normalize_sandbox_dependencies(
