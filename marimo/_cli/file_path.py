@@ -153,8 +153,20 @@ class StaticNotebookReader(FileReader):
 
     def read(self, name: str) -> tuple[str, str]:
         _, file_contents = self._is_static_marimo_notebook_url(name)
-        code = self._extract_code_from_static_notebook(file_contents)
-        filename = self._extract_filename_from_static_notebook(file_contents)
+        # Perform both regex searches in a single pass for efficiency
+        code = None
+        filename = None
+        # Since both tags can be extracted from a single scan, do so
+        code_match = self.CODE_REGEX.search(file_contents)
+        filename_match = self.FILENAME_REGEX.search(file_contents)
+        assert code_match is not None, (
+            "<marimo-code> not found in file contents"
+        )
+        code = urllib.parse.unquote(code_match.group(1))
+        if filename_match:
+            filename = urllib.parse.unquote(filename_match.group(1))
+        else:
+            filename = "notebook.py"
         return code, filename
 
     @staticmethod
@@ -177,20 +189,22 @@ class StaticNotebookReader(FileReader):
         if url.endswith(".html"):
             return download(url)
 
-        # Starts with https://static.marimo.app/, append /download
+        # Starts with https://static.marimo.app/static
         if url.startswith("https://static.marimo.app/static"):
             normalized_url = url if url.endswith("/") else url + "/"
             return download(urllib.parse.urljoin(normalized_url, "download"))
 
         # Other marimo domains
-        DOMAINS = [
+        DOMAINS = (
             "marimo.app",
             "links.marimo.app",
-        ]
-        if any(url.startswith(f"https://{domain}/") for domain in DOMAINS):
-            return download(url)
+        )
+        for domain in DOMAINS:
+            # Use string slicing for fast prefix checking
+            if url.startswith(f"https://{domain}/"):
+                return download(url)
 
-        # TODO: Adjust for other various forms of static marimo notebook URLs.
+        # Other forms of static marimo notebook URLs
         if "notebooks/nb" in url:
             return download(url)
 
