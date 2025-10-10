@@ -25,10 +25,11 @@ def is_github_src(url: str, ext: str) -> bool:
     if not is_url(url):
         return False
 
-    hostname = urllib.parse.urlparse(url).hostname
+    parsed_url = urllib.parse.urlparse(url)
+    hostname = parsed_url.hostname
     if hostname != "github.com" and hostname != "raw.githubusercontent.com":
         return False
-    path: str = urllib.parse.urlparse(url).path
+    path: str = parsed_url.path
     if not path.endswith(ext):
         return False
     return True
