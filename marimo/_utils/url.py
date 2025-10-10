@@ -131,6 +131,9 @@ def is_url(value: str, public: bool = False) -> bool:
     :param value: URL address string to validate
     :param public: (default=False) Set True to only allow a public IP address
     """
+    if not value.startswith(("http://", "https://", "ftp://")):
+        return False
+
     result = pattern.match(value)
     if not public:
         return result is not None
