@@ -37,22 +37,19 @@ def construct_interrupt_handler(
 def construct_sigterm_handler(kernel: "Kernel") -> Callable[[int, Any], None]:
     del kernel
 
-    @dataclass
-    class Bit:
-        value: bool = False
-
-    shutting_down = Bit()
-
+    # Using a function attribute instead of a dataclass instance
+    # avoids a per-handler-class creation and keeps the "once only" flag
+    # fast and memory-efficient.
     def sigterm_handler(signum: int, frame: Any) -> None:
         """Cleans up the kernel and exits."""
         del signum
         del frame
 
-        if shutting_down.value:
+        if getattr(sigterm_handler, "_shutting_down", False):
             # give previous SIGTERM a chance to quit ... makes
             # sure this method is reentrant
             return
-        shutting_down.value = True
+        sigterm_handler._shutting_down = True
 
         get_context().virtual_file_registry.shutdown()
         # Force this process to exit.
