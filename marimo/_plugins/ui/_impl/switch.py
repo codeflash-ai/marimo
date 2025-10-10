@@ -37,11 +37,11 @@ class switch(UIElement[bool, bool]):
         disabled: bool = False,
         on_change: Optional[Callable[[bool], None]] = None,
     ) -> None:
-        if not isinstance(value, bool):
+        if type(value) is not bool:
             raise ValueError(
                 f"Invalid type: `value` must be a bool, but got {type(value)}"
             )
-        if not isinstance(label, str):
+        if type(label) is not str:
             raise ValueError(
                 f"Invalid type: `label` must be a str, but got {type(label)}"
             )
