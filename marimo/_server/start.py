@@ -132,16 +132,19 @@ def _resolve_proxy(
     proxy has a port specified, it will use that port.
     e.g. `example.com:8080`
     """
+    # Local reference for faster access in hot path
+    _proxy_regex = PROXY_REGEX
+
     if not proxy:
         return port, host
 
-    match = PROXY_REGEX.match(proxy)
-    # Our proxy has an explicit port defined, so return that.
-    if match:
-        external_host, external_port = match.groups()
-        return int(external_port), external_host
+    # Avoid .match when ':' not in proxy (most common case for "host" strings)
+    if ":" in proxy:
+        match = _proxy_regex.match(proxy)
+        if match:
+            external_host, external_port = match.groups()
+            return int(external_port), external_host
 
-    # A default to 80 is reasonable if a proxy is provided.
     return 80, proxy
 
 
