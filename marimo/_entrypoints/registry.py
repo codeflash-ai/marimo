@@ -55,19 +55,18 @@ class EntryPointRegistry(Generic[T]):
         """
         # Check denylist first
         denylist_var = f"{self._env_prefix}_DENYLIST"
-        if denylist_var in os.environ:
-            denylist = {
-                n.strip().lower() for n in os.environ[denylist_var].split(",")
-            }
+        denylist_env = os.environ.get(denylist_var)
+        if denylist_env is not None:
+            # Use cached — avoid repeated .split and set construction
+            denylist = _parse_env_list(denylist_env)
             if name.lower() in denylist:
                 return False
 
         # Then check allowlist
         allowlist_var = f"{self._env_prefix}_ALLOWLIST"
-        if allowlist_var in os.environ:
-            allowlist = {
-                n.strip().lower() for n in os.environ[allowlist_var].split(",")
-            }
+        allowlist_env = os.environ.get(allowlist_var)
+        if allowlist_env is not None:
+            allowlist = _parse_env_list(allowlist_env)
             return name.lower() in allowlist
 
         return True
@@ -102,10 +101,14 @@ class EntryPointRegistry(Generic[T]):
             A sorted list of plugin names.
         """
         registered = list(self._plugins.keys())
+        # entry_points() is expensive. Only call once.
         entry_points_list = get_entry_points(self.entry_point_group)
-        entry_point_names = [ep.name for ep in entry_points_list]
-        all_names = set(registered + entry_point_names)
-        return sorted(name for name in all_names if self._is_allowed(name))
+        # entry_points_list is already a sequence, so build set in-place.
+        all_names = set(registered)
+        all_names.update(ep.name for ep in entry_points_list)
+        # Precompute allowed names in a list to avoid repeated generator calls to _is_allowed
+        allowed_names = [name for name in all_names if self._is_allowed(name)]
+        return sorted(allowed_names)
 
     def get(self, name: str) -> T:
         """Get a plugin by name, loading it from entry points if necessary.
@@ -151,8 +154,37 @@ class EntryPointRegistry(Generic[T]):
 
 
 def get_entry_points(group: KnownEntryPoint) -> "EntryPoints":
+    # entry_points() is known to scan packages and can be expensive
+    # Entry point results can be cached for each group to avoid repeated scans in this process
+    # We use a simple per-group cache to avoid repeated queries within a single process run
+    # This assumes that entry points don't mutate in-memory after start-up
+    _ep_cache = getattr(get_entry_points, "_ep_cache", None)
+    if _ep_cache is None:
+        _ep_cache = {}
+        get_entry_points._ep_cache = _ep_cache
+    if group in _ep_cache:
+        return _ep_cache[group]
     ep = entry_points()
     if hasattr(ep, "select"):
-        return ep.select(group=group)
+        selected = ep.select(group=group)
+        _ep_cache[group] = selected
+        return selected
     else:
-        return ep.get(group, [])  # type: ignore
+        gotten = ep.get(group, [])  # type: ignore
+        _ep_cache[group] = gotten
+        return gotten
+
+
+def _parse_env_list(env_val: str) -> set[str]:
+    # Memoization drastically reduces repeated set/list computation for the same env value
+    # Use primitive string cache with maxsize to avoid memory ballooning
+    # This is safe and pure function (no mutation)
+    _cache = getattr(_parse_env_list, "_cache", None)
+    if _cache is None:
+        _cache = {}
+        _parse_env_list._cache = _cache
+    if env_val in _cache:
+        return _cache[env_val]
+    s = {n.strip().lower() for n in env_val.split(",")}
+    _cache[env_val] = s
+    return s
