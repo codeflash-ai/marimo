@@ -52,6 +52,10 @@ if TYPE_CHECKING:
         ContentArrayOfContentPart,
     )
 
+_json_dumps = json.dumps
+
+_FINISH_MSG = f"data: {_json_dumps({'type': 'finish'})}\n\n"
+
 LOGGER = _loggers.marimo_logger()
 
 
@@ -492,68 +496,80 @@ def convert_to_ai_sdk_messages(
     """
 
     # Text events - use start/delta/end pattern with unique IDs
-    if content_type == "text" and isinstance(content_text, str):
-        if text_id is None:
-            text_id = f"text_{uuid.uuid4().hex}"
-        return f"data: {json.dumps({'type': 'text-delta', 'id': text_id, 'delta': content_text})}\n\n"
+    if content_type == "text":
+        if isinstance(content_text, str):
+            tid = text_id if text_id is not None else _gen_id("text")
+            return f"data: {_json_dumps({'type': 'text-delta', 'id': tid, 'delta': content_text})}\n\n"
 
     elif content_type == "text_start":
-        if text_id is None:
-            text_id = f"text_{uuid.uuid4().hex}"
-        return f"data: {json.dumps({'type': 'text-start', 'id': text_id})}\n\n"
+        tid = text_id if text_id is not None else _gen_id("text")
+        return f"data: {_json_dumps({'type': 'text-start', 'id': tid})}\n\n"
 
-    elif content_type == "text_end" and text_id is not None:
-        return f"data: {json.dumps({'type': 'text-end', 'id': text_id})}\n\n"
+    elif content_type == "text_end":
+        if text_id is not None:
+            return (
+                f"data: {_json_dumps({'type': 'text-end', 'id': text_id})}\n\n"
+            )
 
     # Reasoning events - use start/delta/end pattern with unique IDs
-    elif content_type == "reasoning" and isinstance(content_text, str):
-        if text_id is None:
-            text_id = f"reasoning_{uuid.uuid4().hex}"
-        return f"data: {json.dumps({'type': 'reasoning-delta', 'id': text_id, 'delta': content_text})}\n\n"
+    elif content_type == "reasoning":
+        if isinstance(content_text, str):
+            tid = text_id if text_id is not None else _gen_id("reasoning")
+            return f"data: {_json_dumps({'type': 'reasoning-delta', 'id': tid, 'delta': content_text})}\n\n"
 
     elif content_type == "reasoning_start":
-        if text_id is None:
-            text_id = f"reasoning_{uuid.uuid4().hex}"
-        return f"data: {json.dumps({'type': 'reasoning-start', 'id': text_id})}\n\n"
-
-    elif content_type == "reasoning_end" and text_id is not None:
+        tid = text_id if text_id is not None else _gen_id("reasoning")
         return (
-            f"data: {json.dumps({'type': 'reasoning-end', 'id': text_id})}\n\n"
+            f"data: {_json_dumps({'type': 'reasoning-start', 'id': tid})}\n\n"
         )
 
+    elif content_type == "reasoning_end":
+        if text_id is not None:
+            return f"data: {_json_dumps({'type': 'reasoning-end', 'id': text_id})}\n\n"
+
     # Tool use events
-    elif content_type == "tool_call_start" and isinstance(content_text, dict):
-        return f"data: {json.dumps({'type': 'tool-input-start', **content_text})}\n\n"
+    elif content_type == "tool_call_start":
+        if isinstance(content_text, dict):
+            data = {"type": "tool-input-start"}
+            data.update(content_text)
+            return f"data: {_json_dumps(data)}\n\n"
 
-    elif content_type == "tool_call_delta" and isinstance(content_text, dict):
-        return f"data: {json.dumps({'type': 'tool-input-delta', **content_text})}\n\n"
+    elif content_type == "tool_call_delta":
+        if isinstance(content_text, dict):
+            data = {"type": "tool-input-delta"}
+            data.update(content_text)
+            return f"data: {_json_dumps(data)}\n\n"
 
-    elif content_type == "tool_call_end" and isinstance(content_text, dict):
-        return f"data: {json.dumps({'type': 'tool-input-available', **content_text})}\n\n"
+    elif content_type == "tool_call_end":
+        if isinstance(content_text, dict):
+            data = {"type": "tool-input-available"}
+            data.update(content_text)
+            return f"data: {_json_dumps(data)}\n\n"
 
-    elif content_type == "tool_result" and isinstance(content_text, dict):
-        return f"data: {json.dumps({'type': 'tool-output-available', **content_text})}\n\n"
+    elif content_type == "tool_result":
+        if isinstance(content_text, dict):
+            data = {"type": "tool-output-available"}
+            data.update(content_text)
+            return f"data: {_json_dumps(data)}\n\n"
 
     # Finish events
     elif content_type == "finish_reason":
-        return f"data: {json.dumps({'type': 'finish'})}\n\n"
+        return _FINISH_MSG
 
     # Error events
-    elif content_type == "error" and isinstance(content_text, str):
-        return f"data: {json.dumps({'type': 'error', 'errorText': content_text})}\n\n"
+    elif content_type == "error":
+        if isinstance(content_text, str):
+            return f"data: {_json_dumps({'type': 'error', 'errorText': content_text})}\n\n"
 
     # Reasoning signature (for Anthropic thinking models)
-    elif content_type == "reasoning_signature" and isinstance(
-        content_text, dict
-    ):
-        # This might be handled differently in the new protocol
-        return f"data: {json.dumps({'type': 'data-reasoning-signature', 'data': content_text})}\n\n"
+    elif content_type == "reasoning_signature":
+        if isinstance(content_text, dict):
+            return f"data: {_json_dumps({'type': 'data-reasoning-signature', 'data': content_text})}\n\n"
 
-    else:
-        # Default to text delta for unknown types
-        if text_id is None:
-            text_id = f"text_{uuid.uuid4().hex}"
-        return f"data: {json.dumps({'type': 'text-delta', 'id': text_id, 'delta': str(content_text)})}\n\n"
+    # Default to text delta for unknown types
+    if text_id is None:
+        text_id = _gen_id("text")
+    return f"data: {_json_dumps({'type': 'text-delta', 'id': text_id, 'delta': str(content_text)})}\n\n"
 
 
 # Tool conversions
@@ -607,3 +623,8 @@ def convert_to_google_tools(
         }
         for tool in tools
     ]
+
+
+# Move generation of unique text/reasoning ID to minimized helper (faster than f"{}_{uuid.uuid4().hex}")
+def _gen_id(prefix: str) -> str:
+    return prefix + "_" + uuid.uuid4().hex
