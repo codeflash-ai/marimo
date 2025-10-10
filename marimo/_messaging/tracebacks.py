@@ -36,16 +36,35 @@ def _trim_traceback(traceback: str) -> str:
     Skip first DefaultExecutor.execute_cell traceback item which all traces start with.
     """
 
-    lines = traceback.split("\n")
+    # Fast path: avoid work if it's unlikely to match at all
+    if not traceback.startswith("Traceback (most recent call last):\n"):
+        return traceback
+
+    # Find first two newlines and extract first two lines directly
+    first_nl = traceback.find("\n")
+    if first_nl == -1:
+        return traceback
+    second_nl = traceback.find("\n", first_nl + 1)
+    if second_nl == -1:
+        return traceback
+
+    lines = [traceback[:first_nl], traceback[first_nl + 1 : second_nl]]
+
     if (
-        len(lines) > 2
+        len(lines) > 1
         and lines[0] == "Traceback (most recent call last):"
         and '/marimo/_runtime/executor.py", line ' in lines[1]
         and lines[1].endswith(", in execute_cell")
     ):
-        for i in range(2, len(lines)):
-            if lines[i].startswith("  File "):
-                return "\n".join(lines[:1] + lines[i:])
+        rest = traceback[second_nl + 1 :]
+        # Check if the first line starts with "  File "
+        if rest.startswith("  File "):
+            return "\n".join(lines[:1] + [rest])
+
+        # Otherwise, find the first line that starts with "  File "
+        idx = rest.find("\n  File ")
+        if idx != -1:
+            return "\n".join(lines[:1] + [rest[idx + 1 :]])
 
     return traceback
 
