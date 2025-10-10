@@ -52,9 +52,10 @@ class FigureManagers:
         self.figure_managers[str(manager.num)] = manager
 
     def get(self, figure_id: str) -> FigureManagerWebAgg:
-        if figure_id not in self.figure_managers:
+        try:
+            return self.figure_managers[figure_id]
+        except KeyError:
             raise RuntimeError(f"Figure {figure_id} not found.")  # noqa: E501
-        return self.figure_managers[str(figure_id)]
 
     def remove(self, manager: FigureManagerWebAgg) -> None:
         try:
