@@ -24,6 +24,8 @@ from marimo._utils.uv import find_uv_bin
 from marimo._utils.versions import is_editable
 from marimo._version import __version__
 
+_MARIMO_DIR = Path(__file__).parent.parent.parent
+
 LOGGER = _loggers.marimo_logger()
 
 DepFeatures = Literal["lsp", "recommended"]
@@ -162,7 +164,7 @@ def _resolve_requirements_txt_lines(pyproject: PyProjectReader) -> list[str]:
 
 
 def get_marimo_dir() -> Path:
-    return Path(__file__).parent.parent.parent
+    return _MARIMO_DIR
 
 
 def construct_uv_flags(
