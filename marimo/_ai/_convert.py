@@ -317,28 +317,27 @@ def convert_to_groq_messages(
 ) -> list[dict[Any, Any]]:
     groq_messages: list[dict[Any, Any]] = []
 
+    append_groq = groq_messages.append  # optimization: local store
+
     for message in messages:
-        if message.parts:
+        parts = message.parts
+        if parts:
             # Currently only supports text content (Llava is deprecated now)
             # See here - https://console.groq.com/docs/deprecations
-            file_parts = [
-                part for part in message.parts if isinstance(part, FilePart)
-            ]
-            # Convert attachments to text if possible
+            # Combine scan for file_parts and building text_content to single loop for efficiency
             text_content = str(message.content)  # Explicitly convert to string
-            for file in file_parts:
-                if file.media_type.startswith("text"):
-                    text_content += "\n" + _extract_text(file.url)
-                else:
-                    raise ValueError(
-                        f"Unsupported content type {file.media_type}. Only text content is supported."
-                    )
-
-            groq_messages.append(
-                {"role": message.role, "content": text_content}
-            )
+            for part in parts:
+                if isinstance(part, FilePart):
+                    mt = part.media_type
+                    if mt.startswith("text"):
+                        text_content += "\n" + _extract_text(part.url)
+                    else:
+                        raise ValueError(
+                            f"Unsupported content type {mt}. Only text content is supported."
+                        )
+            append_groq({"role": message.role, "content": text_content})
         else:
-            groq_messages.append(
+            append_groq(
                 {
                     "role": message.role,
                     "content": str(
@@ -448,7 +447,8 @@ def convert_to_google_messages(
 def _extract_text(url: str) -> str:
     if url.startswith("data:"):
         # extract base64 encoding from url
-        data = url.split(",")[1]
+        # Instead of split, use partition for efficiency and safety (no IndexError if missing ',')
+        _, _, data = url.partition(",")
         raw = base64.b64decode(data)
         try:
             return raw.decode("utf-8")
