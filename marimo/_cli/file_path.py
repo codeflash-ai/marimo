@@ -205,10 +205,20 @@ class StaticNotebookReader(FileReader):
 
     @staticmethod
     def _extract_filename_from_static_notebook(file_contents: str) -> str:
-        if search := re.search(
-            StaticNotebookReader.FILENAME_REGEX, file_contents
-        ):
-            return urllib.parse.unquote(search.group(1))
+        # Avoid using re.search every call; precompiled regex is faster
+        regex = getattr(StaticNotebookReader, "FILENAME_REGEX", None)
+        if regex is None:
+            # Defensive: fallback if FILENAME_REGEX is missing
+            regex = re.compile(
+                r"<marimo-filename\s+hidden(?:=['\"]{2})?\s*>(.*?)<"
+            )
+        search = regex.search(file_contents)
+        if search:
+            s = search.group(1)
+            # Fast path for common case, unquote only if needed
+            if "%" in s:
+                return urllib.parse.unquote(s)
+            return s
         return "notebook.py"
 
 
