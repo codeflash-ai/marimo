@@ -119,6 +119,7 @@ class AsyncBackgroundTask(ABC):
         Args:
             timeout: Maximum time to wait for startup (in seconds)
         """
+        await asyncio.sleep(0)
         await asyncio.wait_for(self._startup_event.wait(), timeout=timeout)
 
     async def __aenter__(self) -> Self:
