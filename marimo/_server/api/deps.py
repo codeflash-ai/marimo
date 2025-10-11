@@ -132,11 +132,14 @@ class AppState(AppStateBase):
         """Initialize the app state with a request."""
         super().__init__(request.app.state)
         self.request = request
+        self._headers = request.headers
 
     def get_current_session_id(self) -> Optional[SessionId]:
         """Get the current session."""
-        session_id = self.request.headers.get("Marimo-Session-Id")
-        return SessionId(session_id) if session_id is not None else None
+        session_id = self._headers.get("Marimo-Session-Id")
+        if session_id is None:
+            return None
+        return SessionId(session_id)
 
     def require_current_session_id(self) -> SessionId:
         """Get the current session or raise an error."""
