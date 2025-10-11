@@ -4,13 +4,7 @@ from __future__ import annotations
 import json
 import re
 from html import escape, unescape
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, TypeVar, Union, cast
 
 from marimo._messaging.msgspec_encoder import encode_json_str
 from marimo._output.md import _md
