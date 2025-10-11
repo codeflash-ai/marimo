@@ -139,9 +139,7 @@ def hash_cell_impl(cell: CellImpl, hash_type: str = DEFAULT_HASH) -> bytes:
 def hash_function(
     fn: Callable[..., Any], hash_type: str = DEFAULT_HASH
 ) -> bytes:
-    return hash_raw_module(
-        DeprivateVisitor().visit(strip_function(fn)), hash_type
-    )
+    return hash_raw_module(strip_function(fn), hash_type)
 
 
 def hash_cell_group(
