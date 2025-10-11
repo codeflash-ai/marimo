@@ -76,10 +76,10 @@ class StateRegistry:
     ) -> None:
         """Finds instances of state and scope, and adds them to registry if not
         already present."""
-        if defs is None:
-            defs = set(glbls.keys())
-        for variable in defs:
-            lookup = glbls.get(variable, None)
+        defs_keys = defs if defs is not None else glbls.keys()
+        for variable in defs_keys:
+            # Fast path: keys are guaranteed present in glbls
+            lookup = glbls[variable]
             if isinstance(lookup, State):
                 self.register(lookup, variable)
 

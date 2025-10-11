@@ -112,10 +112,10 @@ class UIElementRegistry:
     def register_scope(
         self, glbls: dict[str, Any], defs: Optional[set[str]] = None
     ) -> None:
-        if defs is None:
-            defs = set(glbls.keys())
-        for binding in defs:
-            lookup = glbls.get(binding, None)
+        defs_keys = defs if defs is not None else glbls.keys()
+        for binding in defs_keys:
+            # Fast path: keys are guaranteed present in glbls
+            lookup = glbls[binding]
             if isinstance(lookup, UIElement):
                 self._register_bindings(lookup._id, glbls)
 

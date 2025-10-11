@@ -300,11 +300,8 @@ def get_and_update_context_from_scope(
 
     # Remove non-global references
     ctx_scope = set(scope)
-    if scope_refs is None:
-        scope_refs = set()
-    for ref in scope_refs:
-        if ref in ctx_scope:
-            ctx_scope.remove(ref)
+    if scope_refs:
+        ctx_scope.difference_update(scope_refs)
 
     # This is typically done in post execution hook, but it will not be
     # called in script mode.
