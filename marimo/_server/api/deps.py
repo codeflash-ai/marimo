@@ -132,10 +132,16 @@ class AppState(AppStateBase):
         """Initialize the app state with a request."""
         super().__init__(request.app.state)
         self.request = request
+        # Cache the session id from headers up front to avoid repeated header parsing
+        self._marimo_session_id: Optional[str] = None
+        headers = getattr(request, "headers", None)
+        if headers is not None:
+            # Look up once and store for use by both methods
+            self._marimo_session_id = headers.get("Marimo-Session-Id")
 
     def get_current_session_id(self) -> Optional[SessionId]:
         """Get the current session."""
-        session_id = self.request.headers.get("Marimo-Session-Id")
+        session_id = self._marimo_session_id
         return SessionId(session_id) if session_id is not None else None
 
     def require_current_session_id(self) -> SessionId:
