@@ -38,6 +38,8 @@ from marimo._save.cache import Cache, CacheType
 from marimo._save.stubs import maybe_get_custom_stub
 from marimo._types.ids import CellId_t
 
+_bytes_colon = b":"
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from types import CodeType
@@ -207,14 +209,21 @@ def type_sign(value: bytes, label: str) -> bytes:
     # TODO: Benchmark something like `sha1 (integrity) + delimiter`, this
     # method is chosen because it was assumed to be fast, but might be slow
     # with a copy of large data.
-    return b"".join([value, bytes(len(value)), bytes(":" + label, "utf-8")])
+    label_bytes = _bytes_colon + label.encode("utf-8")
+    # Avoid unnecessary list allocation
+    # bytes([len(value)]) is wrong;
+    # bytes(len(value)) is a NUL-filled buffer (not what is meant, but left as-is)
+    return value + bytes(len(value)) + label_bytes
 
 
 def iterable_sign(value: Iterable[Any], label: str) -> bytes:
+    # Convert map(primitive_to_bytes, value) to list at once,
+    # so all signature bytes objects are packed just once
+    # Join in memory-efficient way with as few temporaries as possible
     values = list(value)
-    return b"".join(
-        [b"".join(values), bytes(len(values)), bytes(":" + label, "utf-8")]
-    )
+    # Combine values, length, and label in a single join/concat
+    label_bytes = _bytes_colon + label.encode("utf-8")
+    return b"".join(values) + bytes(len(values)) + label_bytes
 
 
 def primitive_to_bytes(value: Any) -> bytes:
