@@ -1,7 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 from marimo import _loggers as loggers
 from marimo._config.manager import MarimoConfigManager, ScriptConfigManager
@@ -32,7 +32,12 @@ class AppStateBase:
     @staticmethod
     def from_app(asgi: Starlette) -> AppStateBase:
         """Get the app state with an ASGIApp app."""
-        return AppStateBase(cast(Any, asgi).state)
+        # Direct attribute access is faster than cast() introspection,
+        # and preserves behavioral intent since asgi should be Starlette.
+        # The function signature restricts to Starlette, which always has 'state'.
+        # Cast is not needed for runtime behavior, only type checking.
+        # This avoids unnecessary overhead.
+        return AppStateBase(asgi.state)
 
     def __init__(self, state: State) -> None:
         """Initialize the app state."""
