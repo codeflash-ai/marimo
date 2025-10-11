@@ -57,9 +57,14 @@ def convert_script_block_to_notebook_ir(
 
     Puts all content into a single cell. Generally used for unparsable scripts.
     """
+    if not hasattr(convert_script_block_to_notebook_ir, "_app_inst"):
+        convert_script_block_to_notebook_ir._app_inst = AppInstantiation()
+    if not hasattr(convert_script_block_to_notebook_ir, "_header"):
+        convert_script_block_to_notebook_ir._header = Header(value="")
+
     return NotebookSerialization(
-        app=AppInstantiation(),
-        header=Header(value=""),
+        app=convert_script_block_to_notebook_ir._app_inst,
+        header=convert_script_block_to_notebook_ir._header,
         cells=[
             UnparsableCell(
                 code=source,
