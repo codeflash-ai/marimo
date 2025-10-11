@@ -95,22 +95,11 @@ class NavMenuItemGroup:
 
 
 def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
-    def validate_href(href: str) -> str:
-        if not isinstance(href, str):
-            raise ValueError(f"Invalid href: {href}, expected string")
-        if (
-            href.startswith("/")
-            or href.startswith("#")
-            or href.startswith("http")
-        ):
-            return href
-        raise ValueError(f"Invalid href: {href}, must start with / or #")
-
     items: list[Union[NavMenuItemLink, NavMenuItemGroup]] = []
     for k, v in menu.items():
         if isinstance(v, str):
             items.append(
-                NavMenuItemLink(label=md(v).text, href=validate_href(k))
+                NavMenuItemLink(label=md(v).text, href=_validate_href(k))
             )
         elif isinstance(v, dict):
             subitems: list[NavMenuItemLink] = []
@@ -118,7 +107,7 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
                 if isinstance(vv, str):
                     subitems.append(
                         NavMenuItemLink(
-                            label=md(vv).text, href=validate_href(kk)
+                            label=md(vv).text, href=_validate_href(kk)
                         )
                     )
                 elif isinstance(vv, dict):
@@ -136,7 +125,7 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
                     subitems.append(
                         NavMenuItemLink(
                             label=md(label).text,
-                            href=validate_href(kk),
+                            href=_validate_href(kk),
                             description=(
                                 md(cast(str, description)).text
                                 if description
@@ -154,3 +143,22 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
                 f"Invalid menu item: {v}, expected string or dict"
             )
     return NavMenu(items=items)
+
+
+def _validate_href(href: str) -> str:
+    if not isinstance(href, str):
+        raise ValueError(f"Invalid href: {href}, expected string")
+    if href.startswith("/") or href.startswith("#") or href.startswith("http"):
+        return href
+    raise ValueError(f"Invalid href: {href}, must start with / or #")
+
+
+def _menu_item_link(label: str, href: str, description: str = None):
+    if description is not None:
+        return NavMenuItemLink(
+            label=md(label).text,
+            href=_validate_href(href),
+            description=md(description).text,
+        )
+    else:
+        return NavMenuItemLink(label=md(label).text, href=_validate_href(href))
