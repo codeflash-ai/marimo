@@ -22,6 +22,10 @@ from marimo._version import __version__
 if TYPE_CHECKING:
     from starlette.requests import Request
 
+_HEALTHY_RESPONSE = {"status": "healthy"}
+
+_JSON_HEALTHY_RESPONSE = JSONResponse(_HEALTHY_RESPONSE)
+
 LOGGER = _loggers.marimo_logger()
 
 # Router for health/status endpoints
@@ -30,7 +34,8 @@ router = APIRouter()
 
 def health_check(request: Request) -> JSONResponse:
     del request  # Unused
-    return JSONResponse({"status": "healthy"})
+    # Return the same JSONResponse instance to avoid constructing a new response each call
+    return _JSON_HEALTHY_RESPONSE
 
 
 # Multiple health endpoints to make it easier on the consumer
