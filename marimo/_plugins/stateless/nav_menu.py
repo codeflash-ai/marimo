@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from typing import Literal, Optional, Union, cast
 
 from marimo._output.hypertext import Html
@@ -110,7 +111,7 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
     for k, v in menu.items():
         if isinstance(v, str):
             items.append(
-                NavMenuItemLink(label=md(v).text, href=validate_href(k))
+                NavMenuItemLink(label=get_md_text(v), href=validate_href(k))
             )
         elif isinstance(v, dict):
             subitems: list[NavMenuItemLink] = []
@@ -118,7 +119,7 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
                 if isinstance(vv, str):
                     subitems.append(
                         NavMenuItemLink(
-                            label=md(vv).text, href=validate_href(kk)
+                            label=get_md_text(vv), href=validate_href(kk)
                         )
                     )
                 elif isinstance(vv, dict):
@@ -135,10 +136,10 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
                         )
                     subitems.append(
                         NavMenuItemLink(
-                            label=md(label).text,
+                            label=get_md_text(label),
                             href=validate_href(kk),
                             description=(
-                                md(cast(str, description)).text
+                                get_md_text(cast(str, description))
                                 if description
                                 else None
                             ),
@@ -148,9 +149,17 @@ def _build_and_validate_menu(menu: dict[str, JSONType]) -> NavMenu:
                     raise ValueError(
                         f"Invalid submenu item: {vv}, expected string, or dict"
                     )
-            items.append(NavMenuItemGroup(label=md(k).text, items=subitems))
+            items.append(
+                NavMenuItemGroup(label=get_md_text(k), items=subitems)
+            )
         else:
             raise ValueError(
                 f"Invalid menu item: {v}, expected string or dict"
             )
     return NavMenu(items=items)
+
+
+@lru_cache(maxsize=512)
+def get_md_text(text: str) -> str:
+    # Memoize markdown rendering per unique string for massive speedup
+    return md(text).text
