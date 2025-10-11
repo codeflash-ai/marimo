@@ -207,7 +207,7 @@ def type_sign(value: bytes, label: str) -> bytes:
     # TODO: Benchmark something like `sha1 (integrity) + delimiter`, this
     # method is chosen because it was assumed to be fast, but might be slow
     # with a copy of large data.
-    return b"".join([value, bytes(len(value)), bytes(":" + label, "utf-8")])
+    return value + bytes(len(value)) + bytes(":" + label, "utf-8")
 
 
 def iterable_sign(value: Iterable[Any], label: str) -> bytes:
