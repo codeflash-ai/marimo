@@ -116,9 +116,5 @@ def mddoc(obj: T) -> T:
 
     Returns `obj`, with modification to implement the `RichHelp` protocol.
     """
-    rich_help = cast(RichHelp[T], obj)
-    rich_help._rich_help_ = lambda: _doc_with_signature(  # type: ignore[method-assign]  # noqa: E501
-        obj
-    )
-    # cast back to original type, so type-hinters provide helpful information
-    return cast(T, rich_help)
+    obj._rich_help_ = lambda: _doc_with_signature(obj)  # type: ignore[method-assign]  # noqa: E501
+    return obj
