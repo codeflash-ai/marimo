@@ -34,7 +34,7 @@ class AuthToken:
 
     @staticmethod
     def is_empty(token: AuthToken) -> bool:
-        return str(token) == ""
+        return token._value == ""
 
 
 class SkewProtectionToken:
