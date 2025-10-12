@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import logging
 from contextlib import contextmanager
+from functools import lru_cache
 from logging.handlers import TimedRotatingFileHandler
 from typing import TYPE_CHECKING, Optional
 
@@ -145,6 +146,7 @@ def marimo_logger() -> logging.Logger:
     return logger
 
 
+@lru_cache(maxsize=1)
 def get_log_directory() -> Path:
     from marimo._utils.xdg import marimo_log_dir
 
