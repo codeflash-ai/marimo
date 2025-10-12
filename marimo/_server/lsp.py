@@ -387,7 +387,8 @@ class CompositeLspServer(LspServer):
         # We still lazily start servers as they are enabled.
         # We also need to ensure that the ports are unique
         self.servers: dict[str, LspServer] = {}
-        for server_name, server_constructor in self.LANGUAGE_SERVERS.items():
+        items = self.LANGUAGE_SERVERS.items()
+        for server_name, server_constructor in items:
             last_free_port = find_free_port(last_free_port + 1)
             self.servers[server_name] = server_constructor(last_free_port)
 
@@ -396,12 +397,17 @@ class CompositeLspServer(LspServer):
             copilot = config["completion"]["copilot"]
             return copilot is True or copilot == "github"
 
-        return cast(
-            bool,
-            cast(Any, config.get("language_servers", {}))
-            .get(server_name, {})
-            .get("enabled", False),
-        )
+        # Fast path: minimize get calls and casts
+        lang_servers = config.get("language_servers")
+        if not lang_servers:
+            return False
+
+        server_conf: Any = lang_servers.get(server_name)
+        if not server_conf:
+            return False
+
+        enabled = server_conf.get("enabled")
+        return bool(enabled)
 
     async def start(self) -> Optional[Alert]:
         # .get_config() should not be cached, as it may be updated by the user
