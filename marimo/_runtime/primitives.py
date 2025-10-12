@@ -147,7 +147,15 @@ def is_unclonable_type(obj: object) -> bool:
     # Cell objects in particular are hidden by functools.wraps.
     if isinstance(obj, Cell):
         return True
-    return any([is_instance_by_name(obj, name) for name in UNCLONABLE_TYPES])
+    mod = getattr(obj, "__module__", None)
+    cls = getattr(obj, "__class__", None)
+    if mod is not None and cls is not None:
+        obj_name = f"{mod}.{cls.__name__}"
+        # UNCLONABLE_TYPES is a list; lookup is O(n).
+        # This is still faster than calling is_instance_by_name repeatedly (removes many attribute lookups).
+        if obj_name in UNCLONABLE_TYPES:
+            return True
+    return False
 
 
 def from_unclonable_module(obj: object) -> bool:
