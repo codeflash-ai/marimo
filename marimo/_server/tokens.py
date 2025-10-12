@@ -15,8 +15,7 @@ class AuthToken:
         self._value = value
 
     def __repr__(self) -> str:
-        class_name = self.__class__.__name__
-        return f"{class_name}('**********')"
+        return f"{type(self).__name__}('**********')"
 
     def __str__(self) -> str:
         return self._value
