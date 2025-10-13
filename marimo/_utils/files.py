@@ -6,15 +6,20 @@ from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Union
 
+_num_re = re.compile(r"([0-9]+)")
+
 
 def natural_sort(filename: str) -> list[Union[int, str]]:
-    def convert(text: str) -> Union[int, str]:
-        return int(text) if text.isdigit() else text.lower()
-
-    def alphanum_key(key: str) -> list[Union[int, str]]:
-        return [convert(c) for c in re.split("([0-9]+)", key)]
-
-    return alphanum_key(filename)
+    parts = _num_re.split(filename)
+    for i in range(
+        1, len(parts), 2
+    ):  # Only numeric segments can exist at odd indices
+        parts[i] = int(parts[i])
+    for i in range(
+        0, len(parts), 2
+    ):  # Only non-numeric segments at even indices
+        parts[i] = parts[i].lower()
+    return parts
 
 
 def get_files(folder: str) -> Generator[Path, None, None]:
