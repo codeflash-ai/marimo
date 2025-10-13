@@ -9,10 +9,23 @@ def compile_regex(query: str) -> tuple[re.Pattern[str] | None, bool]:
     """
     Returns compiled regex pattern and whether the query is a valid regex.
     """
+    cache = getattr(compile_regex, "_cache", None)
+    if cache is None:
+        cache = {}
+        compile_regex._cache = cache
+
+    key = (query, re.IGNORECASE)
+    if key in cache:
+        return cache[key]
+
     try:
-        return re.compile(query, re.IGNORECASE), True
+        result = re.compile(query, re.IGNORECASE), True
+        cache[key] = result
+        return result
     except re.error:
-        return None, False
+        result = None, False
+        cache[key] = result
+        return result
 
 
 def is_fuzzy_match(
