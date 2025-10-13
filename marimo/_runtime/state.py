@@ -126,7 +126,7 @@ class StateRegistry:
     def lookup(
         self, name: str, context: Optional[str] = None
     ) -> Optional[State[T]]:
-        name = contextualize_name(name, context)
+        name = name if context is None else f"{context}:{name}"
         if name in self._states:
             return self._states[name].ref()
         return None
