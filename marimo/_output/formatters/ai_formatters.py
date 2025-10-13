@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import openai
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.completion import Completion
+
+from marimo._output import formatting
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -55,12 +61,6 @@ class OpenAIFormatter(FormatterFactory):
         return "openai"
 
     def register(self) -> None:
-        import openai
-        from openai.types.chat import ChatCompletion, ChatCompletionChunk
-        from openai.types.completion import Completion
-
-        from marimo._output import formatting
-
         @formatting.formatter(Completion)
         def _show_completion(
             response: Completion,
@@ -73,19 +73,24 @@ class OpenAIFormatter(FormatterFactory):
                 openai.Stream[Completion] | openai.Stream[ChatCompletionChunk]
             ),
         ) -> tuple[KnownMimeType, str]:
-            total_text: str = ""
+            total_text_parts: list[str] = []
             for chunk in response:
                 if isinstance(chunk, Completion):
-                    total_text += chunk.choices[0].text
+                    total_text_parts.append(chunk.choices[0].text)
                 elif isinstance(chunk, ChatCompletionChunk):
                     if chunk.choices[0].delta.content:
-                        total_text += chunk.choices[0].delta.content
+                        total_text_parts.append(chunk.choices[0].delta.content)
                 else:
                     LOGGER.warning(f"Unknown openai chunk type: {type(chunk)}")
                     # Fallback to the request
                     return plain_text.plain_text(repr(response))._mime_()
 
-                output.replace(md.md(_ensure_closing_code_fence(total_text)))
+                output.replace(
+                    md.md(
+                        _ensure_closing_code_fence("".join(total_text_parts))
+                    )
+                )
+            total_text = "".join(total_text_parts)
             return md.md(total_text)._mime_()
 
         @formatting.formatter(ChatCompletion)
