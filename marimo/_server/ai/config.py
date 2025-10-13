@@ -120,21 +120,28 @@ class AnyProviderConfig:
         require_key: bool = False,
     ) -> AnyProviderConfig:
         ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        api_key = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
+        mode = config.get("mode", "manual")
+        base_url = _get_base_url(ai_config) or fallback_base_url
 
-        kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
-            "ssl_verify": ai_config.get("ssl_verify", True),
-            "ca_bundle_path": ai_config.get("ca_bundle_path", None),
-            "client_pem": ai_config.get("client_pem", None),
-            "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
-        }
+        # Prepare arguments up-front to cut down on dictionary .get lookups
+        ssl_verify = ai_config.get("ssl_verify", True)
+        ca_bundle_path = ai_config.get("ca_bundle_path", None)
+        client_pem = ai_config.get("client_pem", None)
+        extra_headers = ai_config.get("extra_headers", None)
+        tools = _get_tools(mode)
 
-        return AnyProviderConfig(**kwargs)
+        return AnyProviderConfig(
+            base_url=base_url,
+            api_key=api_key,
+            ssl_verify=ssl_verify,
+            ca_bundle_path=ca_bundle_path,
+            client_pem=client_pem,
+            extra_headers=extra_headers,
+            tools=tools,
+        )
 
     @classmethod
     def for_anthropic(cls, config: AiConfig) -> AnyProviderConfig:
@@ -219,18 +226,22 @@ class AnyProviderConfig:
 
 
 def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
+    # Optimize for return-empty fast path
     try:
         tool_manager = get_tool_manager()
     except ValueError:
-        # ToolManager may not be initialized in some tests or non-server contexts
         return []
     return tool_manager.get_tools_for_mode(mode)
 
 
 def _get_ai_config(config: AiConfig, key: str) -> dict[str, Any]:
-    if key not in config:
+    # Direct key existence check and cast for efficiency
+    try:
+        # Avoid using .get twice; do key lookup first
+        ai_config = config[key]
+        return cast(dict[str, Any], ai_config)
+    except KeyError:
         return {}
-    return cast(dict[str, Any], config.get(key, {}))
 
 
 def get_chat_model(config: AiConfig) -> str:
@@ -278,31 +289,30 @@ def _get_key(
     require_key: bool = False,
 ) -> str:
     """Get the API key for a given provider."""
+    # Move isinstance check before cast to avoid unnecessary work
     if not isinstance(config, dict):
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=f"Invalid config for {name}. Go to Settings > AI to configure.",
         )
 
-    config = cast(dict[str, Any], config)
-
+    # Special Bedrock fast paths
     if name == "Bedrock":
-        if "profile_name" in config:
-            profile_name = config.get("profile_name", "")
+        profile_name = config.get("profile_name")
+        if profile_name is not None:
             return f"profile:{profile_name}"
-        elif (
-            "aws_access_key_id" in config and "aws_secret_access_key" in config
-        ):
-            return f"{config['aws_access_key_id']}:{config['aws_secret_access_key']}"
-        else:
-            return ""
+        aws_access_key_id = config.get("aws_access_key_id")
+        aws_secret_access_key = config.get("aws_secret_access_key")
+        if aws_access_key_id is not None and aws_secret_access_key is not None:
+            return f"{aws_access_key_id}:{aws_secret_access_key}"
+        return ""
 
-    if "api_key" in config:
-        key = config["api_key"]
-        if key:
-            return cast(str, key)
+    api_key = config.get("api_key")
+    if api_key:
+        return cast(str, api_key)
 
-    if "http://127.0.0.1:11434/" in config.get("base_url", ""):
+    base_url = config.get("base_url")
+    if isinstance(base_url, str) and "http://127.0.0.1:11434/" in base_url:
         # Ollama can be configured and in that case the api key is not needed.
         # We send a placeholder value to prevent the user from being confused.
         return "ollama-placeholder"
@@ -322,22 +332,18 @@ def _get_key(
 def _get_base_url(config: Any, name: str = "") -> Optional[str]:
     """Get the base URL for a given provider."""
     if not isinstance(config, dict):
-        if name:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail=f"{name} is not configured. Go to Settings > AI to configure.",
-            )
-        else:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Invalid config. Go to Settings > AI to configure.",
-            )
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                f"{name} is not configured. Go to Settings > AI to configure."
+                if name
+                else "Invalid config. Go to Settings > AI to configure."
+            ),
+        )
 
     if name == "Bedrock":
-        if "region_name" in config:
-            return cast(str, config["region_name"])
-        else:
-            return None
-    elif "base_url" in config:
-        return cast(str, config["base_url"])
-    return None
+        region_name = config.get("region_name")
+        return cast(str, region_name) if region_name is not None else None
+
+    base_url = config.get("base_url")
+    return cast(str, base_url) if base_url is not None else None
