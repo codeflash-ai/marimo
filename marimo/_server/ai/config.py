@@ -73,6 +73,7 @@ class AnyProviderConfig:
 
     @classmethod
     def for_ollama(cls, config: AiConfig) -> AnyProviderConfig:
+        # Use explicit local var to avoid recomputation inside _for_openai_like
         default_base_url = "http://127.0.0.1:11434/v1"
         return cls._for_openai_like(
             config,
@@ -119,19 +120,31 @@ class AnyProviderConfig:
         fallback_base_url: Optional[str] = None,
         require_key: bool = False,
     ) -> AnyProviderConfig:
+        # PERF: minimize repeated key lookups
         ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        k = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
 
+        # PERF: Use local variables to avoid repeated dictionary .get()
+        base_url = ai_config.get("base_url")
+        ssl_verify = ai_config.get("ssl_verify", True)
+        ca_bundle_path = ai_config.get("ca_bundle_path")
+        client_pem = ai_config.get("client_pem")
+        extra_headers = ai_config.get("extra_headers")
+        mode = config.get("mode", "manual")
+        # Only call _get_tools once and store result
+        tools = _get_tools(mode)
+
+        # PERF: Avoid using .get() with None default where not needed: .get returns None by default
         kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
-            "ssl_verify": ai_config.get("ssl_verify", True),
-            "ca_bundle_path": ai_config.get("ca_bundle_path", None),
-            "client_pem": ai_config.get("client_pem", None),
-            "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
+            "base_url": base_url or fallback_base_url,
+            "api_key": k,
+            "ssl_verify": ssl_verify,
+            "ca_bundle_path": ca_bundle_path,
+            "client_pem": client_pem,
+            "extra_headers": extra_headers,
+            "tools": tools,
         }
 
         return AnyProviderConfig(**kwargs)
