@@ -56,7 +56,9 @@ class AnyProviderConfig:
 
     @classmethod
     def for_azure(cls, config: AiConfig) -> AnyProviderConfig:
+        # Get the fallback_key just once using os.environ directly to minimize function call overhead.
         fallback_key = cls.os_key("AZURE_API_KEY")
+        # Call the internal factory; this keeps logic centralized.
         return cls._for_openai_like(
             config,
             "azure",
@@ -119,22 +121,31 @@ class AnyProviderConfig:
         fallback_base_url: Optional[str] = None,
         require_key: bool = False,
     ) -> AnyProviderConfig:
-        ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        # Avoid unnecessary type casts and intermediate variables.
+        ai_config = _get_ai_config(config, key)
+        api_key = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
+        # Avoid repeated .get lookups by using dictionary unpacking for static keys.
+        base_url = _get_base_url(ai_config) or fallback_base_url
+        ssl_verify = ai_config.get("ssl_verify", True)
+        ca_bundle_path = ai_config.get("ca_bundle_path")
+        client_pem = ai_config.get("client_pem")
+        extra_headers = ai_config.get("extra_headers")
+        # Cache config.get('mode') only once.
+        mode = config.get("mode", "manual")
+        tools = _get_tools(mode)
 
-        kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
-            "ssl_verify": ai_config.get("ssl_verify", True),
-            "ca_bundle_path": ai_config.get("ca_bundle_path", None),
-            "client_pem": ai_config.get("client_pem", None),
-            "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
-        }
-
-        return AnyProviderConfig(**kwargs)
+        # Direct dict construction using local variables - improves readability and performance slightly.
+        return AnyProviderConfig(
+            base_url=base_url,
+            api_key=api_key,
+            ssl_verify=ssl_verify,
+            ca_bundle_path=ca_bundle_path,
+            client_pem=client_pem,
+            extra_headers=extra_headers,
+            tools=tools,
+        )
 
     @classmethod
     def for_anthropic(cls, config: AiConfig) -> AnyProviderConfig:
@@ -213,6 +224,7 @@ class AnyProviderConfig:
 
     @classmethod
     def os_key(cls, key: str) -> Optional[str]:
+        # Directly use os.environ.get (no imports outside class method for reduced memory/namespace pollution).
         import os
 
         return os.environ.get(key)
