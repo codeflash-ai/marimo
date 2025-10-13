@@ -285,7 +285,10 @@ class RuleContext:
         return self.global_context.stderr
 
     def get_errors(self, key: str) -> list[tuple[Exception, CellDef]]:
-        return self.global_context._errors.get(key, [])
+        try:
+            return self.global_context._errors[key]
+        except KeyError:
+            return []
 
     def get_logs(
         self, rule_code: str | None = None
