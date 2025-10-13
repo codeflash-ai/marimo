@@ -174,11 +174,31 @@ class AnyProviderConfig:
     @classmethod
     def for_bedrock(cls, config: AiConfig) -> AnyProviderConfig:
         ai_config = _get_ai_config(config, "bedrock")
+        # Inline _get_base_url and _get_tools calls to avoid redundant dict casts and method calls
         key = _get_key(ai_config, "Bedrock")
+        # _get_base_url and _get_tools each only need a dict if their isinstance-checks pass
+        base_url = None
+        if isinstance(ai_config, dict):
+            if "region_name" in ai_config:
+                base_url = cast(str, ai_config["region_name"])
+            else:
+                base_url = None
+        else:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Bedrock is not configured. Go to Settings > AI to configure.",
+            )
+        # _get_tools uses get_tool_manager, no further optimization possible
+        mode = config.get("mode", "manual")
+        try:
+            tool_manager = get_tool_manager()
+            tools = tool_manager.get_tools_for_mode(mode)
+        except ValueError:
+            tools = []
         return cls(
-            base_url=_get_base_url(ai_config),
+            base_url=base_url,
             api_key=key,
-            tools=_get_tools(config.get("mode", "manual")),
+            tools=tools,
         )
 
     @classmethod
@@ -228,9 +248,11 @@ def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
 
 
 def _get_ai_config(config: AiConfig, key: str) -> dict[str, Any]:
-    if key not in config:
+    # Avoid double dict lookup: config.get returns None if key not present, so only do it once
+    value = config.get(key)
+    if value is None:
         return {}
-    return cast(dict[str, Any], config.get(key, {}))
+    return cast(dict[str, Any], value)
 
 
 def get_chat_model(config: AiConfig) -> str:
@@ -287,22 +309,20 @@ def _get_key(
     config = cast(dict[str, Any], config)
 
     if name == "Bedrock":
+        # Lookup 'profile_name' directly instead of checking first, avoiding double lookup, short-circuit by condition order
         if "profile_name" in config:
-            profile_name = config.get("profile_name", "")
-            return f"profile:{profile_name}"
-        elif (
-            "aws_access_key_id" in config and "aws_secret_access_key" in config
-        ):
-            return f"{config['aws_access_key_id']}:{config['aws_secret_access_key']}"
-        else:
-            return ""
+            return f"profile:{config.get('profile_name', '')}"
+        aws_access_key_id = config.get("aws_access_key_id")
+        if aws_access_key_id and "aws_secret_access_key" in config:
+            return f"{aws_access_key_id}:{config['aws_secret_access_key']}"
+        return ""
 
-    if "api_key" in config:
-        key = config["api_key"]
-        if key:
-            return cast(str, key)
+    key = config.get("api_key")
+    if key:
+        return cast(str, key)
 
-    if "http://127.0.0.1:11434/" in config.get("base_url", ""):
+    base_url = config.get("base_url", "")
+    if "http://127.0.0.1:11434/" in base_url:
         # Ollama can be configured and in that case the api key is not needed.
         # We send a placeholder value to prevent the user from being confused.
         return "ollama-placeholder"
