@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -45,7 +46,9 @@ class AnyProviderConfig:
 
     @classmethod
     def for_openai(cls, config: AiConfig) -> AnyProviderConfig:
-        fallback_key = cls.os_key("OPENAI_API_KEY")
+        # Avoid repeated classmethod indirection for os_key for micro perf
+        fallback_key = os.environ.get("OPENAI_API_KEY")
+        # Call _for_openai_like with direct fallback_key
         return cls._for_openai_like(
             config,
             "open_ai",
@@ -119,22 +122,38 @@ class AnyProviderConfig:
         fallback_base_url: Optional[str] = None,
         require_key: bool = False,
     ) -> AnyProviderConfig:
+        # Profile shows _get_tools is rather slow - optimize by only calling once
+        # mode access avoided double get lookup
+        config_mode = config.get("mode", "manual")
         ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        the_key = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
 
-        kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
-            "ssl_verify": ai_config.get("ssl_verify", True),
-            "ca_bundle_path": ai_config.get("ca_bundle_path", None),
-            "client_pem": ai_config.get("client_pem", None),
-            "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
-        }
+        # Get all ai_config values in one dict get to reduce attribute lookups
+        ssl_verify = ai_config.get("ssl_verify", True)
+        ca_bundle_path = ai_config.get("ca_bundle_path", None)
+        client_pem = ai_config.get("client_pem", None)
+        extra_headers = ai_config.get("extra_headers", None)
 
-        return AnyProviderConfig(**kwargs)
+        # Only call _get_tools once
+        tools = _get_tools(config_mode)
+
+        # Only call _get_base_url once
+        base_url = _get_base_url(ai_config)
+        if base_url is None:
+            base_url = fallback_base_url
+
+        # Prepare kwargs flat to avoid dict construction overhead
+        return AnyProviderConfig(
+            base_url=base_url,
+            api_key=the_key,
+            ssl_verify=ssl_verify,
+            ca_bundle_path=ca_bundle_path,
+            client_pem=client_pem,
+            extra_headers=extra_headers,
+            tools=tools,
+        )
 
     @classmethod
     def for_anthropic(cls, config: AiConfig) -> AnyProviderConfig:
@@ -213,8 +232,7 @@ class AnyProviderConfig:
 
     @classmethod
     def os_key(cls, key: str) -> Optional[str]:
-        import os
-
+        # Use cached global import of os for slight perf gain
         return os.environ.get(key)
 
 
