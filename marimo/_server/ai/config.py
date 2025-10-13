@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -84,7 +85,7 @@ class AnyProviderConfig:
 
     @classmethod
     def for_github(cls, config: AiConfig) -> AnyProviderConfig:
-        fallback_key = cls.os_key("GITHUB_TOKEN")
+        fallback_key = os.environ.get("GITHUB_TOKEN")
         return cls._for_openai_like(
             config,
             "github",
@@ -213,8 +214,6 @@ class AnyProviderConfig:
 
     @classmethod
     def os_key(cls, key: str) -> Optional[str]:
-        import os
-
         return os.environ.get(key)
 
 
