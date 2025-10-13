@@ -67,8 +67,24 @@ class AnyProviderConfig:
 
     @classmethod
     def for_openai_compatible(cls, config: AiConfig) -> AnyProviderConfig:
-        return cls._for_openai_like(
-            config, "open_ai_compatible", "OpenAI Compatible"
+        ai_config: dict[str, Any] = _get_ai_config(
+            config, "open_ai_compatible"
+        )
+        key = _get_key(
+            ai_config,
+            "OpenAI Compatible",
+            fallback_key=None,
+            require_key=False,
+        )
+
+        return AnyProviderConfig(
+            base_url=_get_base_url(ai_config) or None,
+            api_key=key,
+            ssl_verify=ai_config.get("ssl_verify", True),
+            ca_bundle_path=ai_config.get("ca_bundle_path", None),
+            client_pem=ai_config.get("client_pem", None),
+            extra_headers=ai_config.get("extra_headers", None),
+            tools=_get_tools(config.get("mode", "manual")),
         )
 
     @classmethod
