@@ -24,7 +24,7 @@ def extract_name(key: str) -> str:
     # Some variables may use a state internally, as such the lookup needs a
     # context qualifier. We delimit the context and name with a colon, which is
     # not a valid python variable name character.
-    return key.split(":")[-1]
+    return key.rpartition(":")[2]
 
 
 def contextualize_name(key: str, context: Optional[str]) -> str:
