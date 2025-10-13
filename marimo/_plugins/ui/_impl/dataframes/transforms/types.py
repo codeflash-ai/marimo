@@ -263,7 +263,7 @@ class TransformHandler(abc.ABC, Generic[T]):
     def as_python_code(
         df_name: str, columns: list[str], transforms: list[Transform]
     ) -> str | None:
-        del df_name, transforms, columns
+        # No operations needed, return None immediately
         return None
 
     @staticmethod
