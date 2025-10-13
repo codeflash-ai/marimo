@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -154,7 +155,8 @@ class AnyProviderConfig:
 
     @classmethod
     def for_google(cls, config: AiConfig) -> AnyProviderConfig:
-        fallback_key = cls.os_key("GEMINI_API_KEY") or cls.os_key(
+        # Inline the 'os_key' usage to avoid repeated import overhead and function call
+        fallback_key = os.environ.get("GEMINI_API_KEY") or os.environ.get(
             "GOOGLE_API_KEY"
         )
         ai_config = _get_ai_config(config, "google")
@@ -164,11 +166,13 @@ class AnyProviderConfig:
             fallback_key=fallback_key,
             require_key=False,
         )
+        # Avoid repeated 'config.get("mode", "manual")' calls
+        mode = config.get("mode", "manual")
         return cls(
             base_url=_get_base_url(ai_config),
             api_key=key,
             ssl_verify=True,
-            tools=_get_tools(config.get("mode", "manual")),
+            tools=_get_tools(mode),
         )
 
     @classmethod
@@ -213,12 +217,12 @@ class AnyProviderConfig:
 
     @classmethod
     def os_key(cls, key: str) -> Optional[str]:
-        import os
-
+        # Reuse global import for os to avoid repeated import
         return os.environ.get(key)
 
 
 def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
+    # get_tool_manager() can be expensive if it raises, so minimize execution paths
     try:
         tool_manager = get_tool_manager()
     except ValueError:
@@ -228,9 +232,11 @@ def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
 
 
 def _get_ai_config(config: AiConfig, key: str) -> dict[str, Any]:
-    if key not in config:
+    # Avoid unnecessary call to config.get if key not in config
+    val = config.get(key)
+    if val is None:
         return {}
-    return cast(dict[str, Any], config.get(key, {}))
+    return cast(dict[str, Any], val)
 
 
 def get_chat_model(config: AiConfig) -> str:
@@ -287,22 +293,23 @@ def _get_key(
     config = cast(dict[str, Any], config)
 
     if name == "Bedrock":
-        if "profile_name" in config:
-            profile_name = config.get("profile_name", "")
+        # Use chained if/elif for locality and short-circuiting
+        profile_name = config.get("profile_name")
+        if profile_name is not None:
             return f"profile:{profile_name}"
-        elif (
-            "aws_access_key_id" in config and "aws_secret_access_key" in config
-        ):
-            return f"{config['aws_access_key_id']}:{config['aws_secret_access_key']}"
-        else:
-            return ""
+        aws_id = config.get("aws_access_key_id")
+        aws_secret = config.get("aws_secret_access_key")
+        if aws_id is not None and aws_secret is not None:
+            return f"{aws_id}:{aws_secret}"
+        return ""
 
-    if "api_key" in config:
-        key = config["api_key"]
-        if key:
-            return cast(str, key)
+    api_key = config.get("api_key")
+    if api_key:
+        return cast(str, api_key)
 
-    if "http://127.0.0.1:11434/" in config.get("base_url", ""):
+    base_url = config.get("base_url")
+    # Direct test for substring to avoid calling get twice
+    if base_url and "http://127.0.0.1:11434/" in base_url:
         # Ollama can be configured and in that case the api key is not needed.
         # We send a placeholder value to prevent the user from being confused.
         return "ollama-placeholder"
@@ -334,10 +341,9 @@ def _get_base_url(config: Any, name: str = "") -> Optional[str]:
             )
 
     if name == "Bedrock":
-        if "region_name" in config:
-            return cast(str, config["region_name"])
-        else:
-            return None
-    elif "base_url" in config:
-        return cast(str, config["base_url"])
+        region = config.get("region_name")
+        return cast(str, region) if region is not None else None
+    base_url = config.get("base_url")
+    if base_url is not None:
+        return cast(str, base_url)
     return None
