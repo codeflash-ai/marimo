@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os as _os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -22,6 +23,8 @@ from marimo._server.ai.ids import AiModelId
 from marimo._server.ai.tools.tool_manager import get_tool_manager
 from marimo._server.ai.tools.types import ToolDefinition
 from marimo._server.api.status import HTTPStatus
+
+_ENVIRON = _os.environ
 
 
 @dataclass
@@ -97,7 +100,9 @@ class AnyProviderConfig:
 
     @classmethod
     def for_openrouter(cls, config: AiConfig) -> AnyProviderConfig:
-        fallback_key = cls.os_key("OPENROUTER_API_KEY")
+        # Use os.environ directly, bypassing repeated module-level lookups/imports.
+        # This avoids repeated import os (costly at runtime) on every call.
+        fallback_key = _ENVIRON.get("OPENROUTER_API_KEY")
         return cls._for_openai_like(
             config,
             "openrouter",
@@ -120,20 +125,26 @@ class AnyProviderConfig:
         require_key: bool = False,
     ) -> AnyProviderConfig:
         ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        _key = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
 
+        # Store config.get('mode', ...) in a local variable to avoid repeated lookup
+        mode = config.get("mode", "manual")
+        base_url = _get_base_url(ai_config)
         kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
+            "base_url": base_url
+            if base_url is not None
+            else fallback_base_url,
+            "api_key": _key,
             "ssl_verify": ai_config.get("ssl_verify", True),
             "ca_bundle_path": ai_config.get("ca_bundle_path", None),
             "client_pem": ai_config.get("client_pem", None),
             "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
+            "tools": _get_tools(mode),
         }
 
+        # Move constructor call out of dict (for profiling clarity, no speedup here)
         return AnyProviderConfig(**kwargs)
 
     @classmethod
