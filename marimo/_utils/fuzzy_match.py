@@ -31,6 +31,14 @@ def is_fuzzy_match(
         is_regex: Whether the query is a valid regex.
     """
     if is_regex and compiled_pattern:
-        return bool(compiled_pattern.search(name))
+        # Prefer local variable for method
+        search = compiled_pattern.search
+        return bool(search(name))
     else:
-        return query.lower() in name.lower()
+        # Fast path: skip unnecessary lower() if query is already in name
+        if query in name:
+            return True
+        # Avoid recomputing lower()
+        name_lower = name.lower()
+        query_lower = query.lower()
+        return query_lower in name_lower
