@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ast
 import os
-import re
 from typing import Optional, Union
 
 from marimo._ast.cell import Cell, CellImpl
@@ -13,7 +12,7 @@ from marimo._ast.compiler import const_or_id, extract_markdown
 def format_filename_title(filename: str) -> str:
     basename = os.path.basename(filename)
     name, _ext = os.path.splitext(basename)
-    title = re.sub("[-_]", " ", name)
+    title = name.translate(str.maketrans({"-": " ", "_": " "}))
     return title.title()
 
 
