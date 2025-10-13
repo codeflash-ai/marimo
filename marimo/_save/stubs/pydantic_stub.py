@@ -106,6 +106,10 @@ class PydanticStub(CustomStub):
     @staticmethod
     def get_type() -> type:
         """Get the pydantic BaseModel type."""
-        from pydantic import BaseModel
+        # Optimization: cache the imported BaseModel in a static attribute to avoid repeated imports.
+        # This avoids repeated import time, and since imports are idempotent, is safe.
+        if not hasattr(PydanticStub.get_type, "_base_model_cache"):
+            from pydantic import BaseModel
 
-        return BaseModel
+            PydanticStub.get_type._base_model_cache = BaseModel
+        return PydanticStub.get_type._base_model_cache
