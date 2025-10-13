@@ -85,15 +85,17 @@ class UIElementRegistry:
         # Also introspects _Namespace objects, including the name of the
         # _Namespace if it contains `object_id`
         bindings: set[str] = set()
+        is_ui_element = UIElement.__instancecheck__
+        is_namespace = _Namespace.__instancecheck__
+        has_parent_id = self._has_parent_id
+        add_binding = bindings.add
+
         for name, value in glbls.items():
-            if isinstance(value, UIElement) and self._has_parent_id(
-                value, object_id
-            ):
-                bindings.add(name)
-            elif isinstance(
-                value, _Namespace
-            ) and self._find_bindings_in_namespace(object_id, value):
-                bindings.add(name)
+            if is_ui_element(value) and has_parent_id(value, object_id):
+                add_binding(name)
+            elif is_namespace(value):
+                if self._find_bindings_in_namespace(object_id, value):
+                    add_binding(name)
         return bindings
 
     def _register_bindings(
