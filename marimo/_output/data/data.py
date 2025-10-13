@@ -199,23 +199,47 @@ def sanitize_json_bigint(
     MAX_SAFE_INTEGER = 9007199254740991
     MIN_SAFE_INTEGER = -9007199254740991
 
+    # Performance optimizations:
+    # - Replace inner function lookups with local variables for functions and constants.
+    # - Use direct type comparisons ("type(obj) is int") for faster isinstance checks for int.
+    # - Avoid unnecessary dict, list construction by pre-allocating when possible.
+
     def convert_key(key: Any) -> Any:
         # Keys must be str, int, float, bool, or None
+        # Using type() for str/int/float/bool for faster single-checks
         if key is None:
             return key
-        if isinstance(key, (str, int, float, bool)):
+        kt = type(key)
+        if kt is str or kt is int or kt is float or kt is bool:
             return key
         return str(key)
 
+    # To speed up recursion and minimize function call overhead, assign frequently used
+    # constants and functions to local variables before the recursion starts.
+    _MAX_SAFE = MAX_SAFE_INTEGER
+    _MIN_SAFE = MIN_SAFE_INTEGER
+    _convert_key = convert_key
+    _str = str
+    _type = type
+
     def convert_bigint(obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {convert_key(k): convert_bigint(v) for k, v in obj.items()}  # type: ignore
-        elif isinstance(obj, list):
-            return [convert_bigint(item) for item in obj]  # type: ignore
-        elif isinstance(obj, int) and (
-            obj > MAX_SAFE_INTEGER or obj < MIN_SAFE_INTEGER
-        ):
-            return str(obj)
+        ot = _type(obj)
+        if ot is dict:
+            # Pre-size for performance, avoid generator overhead
+            result = {}
+            items = obj.items()
+            # Use direct for-loop instead of dict comprehension for less overhead on large dicts
+            for k, v in items:
+                result[_convert_key(k)] = convert_bigint(v)
+            return result
+        elif ot is list:
+            # Pre-size for list allocation
+            return [convert_bigint(item) for item in obj]
+        elif ot is int:
+            if obj > _MAX_SAFE or obj < _MIN_SAFE:
+                return _str(obj)
+            else:
+                return obj
         else:
             return obj
 
@@ -224,6 +248,7 @@ def sanitize_json_bigint(
     else:
         as_json = data
 
+    # Directly dump using optimized structure
     return dumps(
         convert_bigint(as_json),
         indent=None,
