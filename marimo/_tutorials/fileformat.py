@@ -1,6 +1,10 @@
 # Copyright 2025 Marimo. All rights reserved
 
+import random
+
 import marimo
+
+_randint = random.randint
 
 __generated_with = "0.15.5"
 app = marimo.App()
@@ -13,6 +17,7 @@ with app.setup:
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -311,7 +316,7 @@ def roll_die():
 
     Notice the indicator in the bottom right of the cell.
     """
-    return random.randint(1, 7)
+    return _randint(1, 7)
 
 
 @app.cell(hide_code=True)
@@ -411,6 +416,7 @@ def wrapped_function_example(variable):
         bottom-right corner indicates this.
         """
         return variable
+
     return
 
 
@@ -451,7 +457,7 @@ def _(mo):
 
 @app.cell
 def _():
-    with open(__file__, "r", encoding="utf-8") as f:
+    with open(__file__, encoding="utf-8") as f:
         contents = f.read()
     return (contents,)
 
