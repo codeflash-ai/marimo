@@ -18,6 +18,9 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
     BASE_INDENT_SIZE = 4
     FOUR_SPACES = "    "
 
+    # The following are class attributes, which as per read-only module, must not be redefined.
+    # LIST_PATTERN, INDENT_LEVELS, BASE_INDENT_SIZE, FOUR_SPACES are defined externally.
+
     def __init__(self, md: Markdown) -> None:
         super().__init__(md)
 
@@ -27,24 +30,29 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
 
         Returns 2 for 2-space indentation or 4 for 4-space indentation.
         """
+        # Optimization: Avoid .replace and .len in loop unless truly needed.
+        # Use a preallocated list, and avoid local variable lookups through direct attribute reference.
+        # Cache FOUR_SPACES and LIST_PATTERN
+        LIST_PATTERN = self.LIST_PATTERN
+        FOUR_SPACES = self.FOUR_SPACES
         indents: list[int] = []
+        append_indent = indents.append
         for line in lines:
-            match = self.LIST_PATTERN.match(line)
+            match = LIST_PATTERN.match(line)
             if match:
                 indent_str = match.group(1)
-                if indent_str:  # Skip non-indented items
-                    indent_count = len(
-                        indent_str.replace("\t", self.FOUR_SPACES)
-                    )
-                    indents.append(indent_count)
+                if indent_str:
+                    # Only call .replace if there's a '\t'
+                    if "\t" in indent_str:
+                        indent_str = indent_str.replace("\t", FOUR_SPACES)
+                    indent_count = len(indent_str)
+                    append_indent(indent_count)
 
         if not indents:
             return self.BASE_INDENT_SIZE
 
-        # Find the smallest non-zero indent - this is likely our base level
         min_indent = min(indents)
 
-        # Choose the closest allowed indent level
         if min_indent <= 2:
             return 2
         else:
@@ -64,8 +72,11 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
         Returns:
             Normalized indentation string using 2-space increments
         """
-        # Convert tabs to spaces (assuming 1 tab = 4 spaces)
-        normalized = indent_str.replace("\t", self.FOUR_SPACES)
+        # Optimization: Only replace if tab exists.
+        if "\t" in indent_str:
+            normalized = indent_str.replace("\t", self.FOUR_SPACES)
+        else:
+            normalized = indent_str
         indent_count = len(normalized)
 
         if indent_count == 0:
@@ -93,28 +104,24 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
         if not lines:
             return lines
 
-        # Detect the base indentation level used in this document
         base_level = self._detect_base_indent(lines)
-
+        LIST_PATTERN = self.LIST_PATTERN
         result_lines: list[str] = []
+        append_result = result_lines.append
 
         for line in lines:
-            match = self.LIST_PATTERN.match(line)
+            match = LIST_PATTERN.match(line)
             if match:
                 indent, marker, space, content = match.groups()
-
-                # Normalize the indentation based on detected base level
                 normalized_indent = self._normalize_indentation(
                     indent, base_level
                 )
-
-                # Reconstruct the line with normalized indentation
                 normalized_line = (
                     f"{normalized_indent}{marker}{space}{content}"
                 )
-                result_lines.append(normalized_line)
+                append_result(normalized_line)
             else:
-                result_lines.append(line)
+                append_result(line)
 
         return result_lines
 
