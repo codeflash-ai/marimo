@@ -617,14 +617,16 @@ def _maybe_version(node: Node) -> Optional[str]:
     #        Name(id='__generated_with', ctx=Store())],
     #      value=Constant(value=...)
     #    )
-    if (
-        isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id == "__generated_with"
-        and isinstance(node.value, ast.Constant)
-    ):
-        return str(node.value.value)
+    # Use fast path to avoid repeated attribute lookups
+    if type(node) is ast.Assign:
+        targets = node.targets
+        if (
+            len(targets) == 1
+            and type(targets[0]) is ast.Name
+            and targets[0].id == "__generated_with"
+            and type(node.value) is ast.Constant
+        ):
+            return str(node.value.value)
     return None
 
 
