@@ -42,7 +42,12 @@ class Response:
         This assumes the response is UTF-8 encoded.
         In future, we can infer the encoding from the headers.
         """
-        return json.loads(self.text())
+        # Avoid creating intermediate string for line ending normalization
+        # Most JSON responses don't contain problematic line endings in structure,
+        # so decode and load directly for a measurable speed gain.
+        # If you *must* normalize, keep text(); but here it's safe to load
+        # directly, matching the prior logic, since loads() ignores line endings.
+        return json.loads(self.content.decode("utf-8"))
 
     def text(self) -> str:
         """Get response content as text.
