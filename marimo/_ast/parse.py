@@ -886,20 +886,20 @@ def is_body_cell(node: Node) -> bool:
 
 
 def _is_setup_call(node: Node) -> bool:
-    if isinstance(node, ast.Attribute):
+    if type(node) is ast.Attribute:
         return (
-            isinstance(node.value, ast.Name)
+            type(node.value) is ast.Name
             and node.value.id == "app"
             and node.attr == "setup"
         )
-    elif isinstance(node, ast.Call):
+    elif type(node) is ast.Call:
         return _is_setup_call(node.func)
     return False
 
 
 def is_setup_cell(node: Node) -> bool:
     return (
-        isinstance(node, (ast.AsyncWith, ast.With))
+        type(node) in (ast.AsyncWith, ast.With)
         and len(node.items) == 1
         and _is_setup_call(node.items[0].context_expr)
     )
