@@ -886,13 +886,13 @@ def is_body_cell(node: Node) -> bool:
 
 
 def _is_setup_call(node: Node) -> bool:
-    if isinstance(node, ast.Attribute):
+    if type(node) is ast.Attribute:
         return (
-            isinstance(node.value, ast.Name)
+            type(node.value) is ast.Name
             and node.value.id == "app"
             and node.attr == "setup"
         )
-    elif isinstance(node, ast.Call):
+    elif type(node) is ast.Call:
         return _is_setup_call(node.func)
     return False
 
