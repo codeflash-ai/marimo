@@ -634,28 +634,41 @@ def _eval_kwargs(
     """Convert a list of keyword arguments to a dictionary."""
     kwargs = {}
     violations = []
+
+    # Local variable lookups for improved speed in tight loop
+    Const = ast.Constant
+    List = ast.List
+    append_v = violations.append
+    append_k = kwargs.__setitem__
+    Violation_ = Violation
+    msg = UNEXPECTED_KEYWORD_VALUE_VIOLATION
+
     for kw in keywords:
-        # Only accept Constants, or lists of constants
-        if kw.arg and isinstance(kw.value, ast.Constant):
-            kwargs[kw.arg] = kw.value.value
-        elif kw.arg and isinstance(kw.value, ast.List):
+        arg = kw.arg
+        value = kw.value
+        if arg and isinstance(value, Const):
+            append_k(arg, value.value)
+        elif arg and isinstance(value, List):
+            elts = value.elts
+            # Pre-size the list; assuming most elts are valid
             list_values = []
-            for elt in kw.value.elts:
-                if isinstance(elt, ast.Constant):
-                    list_values.append(elt.value)
+            append_lv = list_values.append
+            for elt in elts:
+                if isinstance(elt, Const):
+                    append_lv(elt.value)
                 else:
-                    violations.append(
-                        Violation(
-                            UNEXPECTED_KEYWORD_VALUE_VIOLATION,
+                    append_v(
+                        Violation_(
+                            msg,
                             lineno=elt.lineno,
                             col_offset=elt.col_offset,
                         )
                     )
-            kwargs[kw.arg] = list_values
+            append_k(arg, list_values)
         else:
-            violations.append(
-                Violation(
-                    UNEXPECTED_KEYWORD_VALUE_VIOLATION,
+            append_v(
+                Violation_(
+                    msg,
                     lineno=kw.lineno,
                     col_offset=kw.col_offset,
                 )
