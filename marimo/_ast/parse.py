@@ -836,17 +836,34 @@ def is_app_def(node: Node, import_alias: str = "marimo") -> bool:
     #      )
     #    )
     # A bit obnoxious as a huge conditional, but also better for line coverage.
-    return (
-        isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id == "app"
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == import_alias
-        and node.value.func.attr == "App"
-    )
+
+    # Minor micro-optimization: cache local variables to reduce attribute lookups and function calls
+    # Only extract these if cheap-to-test conditions pass to avoid overhead
+
+    if not isinstance(node, ast.Assign):
+        return False
+    targets = node.targets
+    if len(targets) != 1:
+        return False
+    target0 = targets[0]
+    if not isinstance(target0, ast.Name):
+        return False
+    if target0.id != "app":
+        return False
+    value = node.value
+    if not isinstance(value, ast.Call):
+        return False
+    func = value.func
+    if not isinstance(func, ast.Attribute):
+        return False
+    func_value = func.value
+    if not isinstance(func_value, ast.Name):
+        return False
+    if func_value.id != import_alias:
+        return False
+    if func.attr != "App":
+        return False
+    return True
 
 
 def is_cell_decorator(
