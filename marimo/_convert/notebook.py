@@ -60,24 +60,37 @@ def convert_from_notebook_v1_to_ir(
         str: The python source code.
     """
 
+    # Cache methods and constants for faster lookup
+    get_cells = notebook_v1.get
+    cells = get_cells("cells", [])
+
+    # Pre-declare frequently reused dict key strings for potential perf benefit
+    get_code = "code"
+    get_name = "name"
+    get_config = "config"
+    get_column = "column"
+    get_disabled = "disabled"
+    get_hide_code = "hide_code"
+
+    def build_cell(cell):
+        config = cell.get(get_config, {})
+        return CellDef(
+            code=cell.get(get_code, "") or "",
+            name=cell.get(get_name, "") or "",
+            options={
+                "column": config.get(get_column, None),
+                "disabled": config.get(get_disabled, False),
+                "hide_code": config.get(get_hide_code, False),
+            },
+        )
+
+    cell_defs = [build_cell(cell) for cell in cells]
+
     return NotebookSerializationV1(
         app=AppInstantiation(options={}),
         header=None,
         version=None,
-        cells=[
-            CellDef(
-                code=cell.get("code", "") or "",
-                name=cell.get("name", "") or "",
-                options={
-                    "column": cell.get("config", {}).get("column", None),
-                    "disabled": cell.get("config", {}).get("disabled", False),
-                    "hide_code": cell.get("config", {}).get(
-                        "hide_code", False
-                    ),
-                },
-            )
-            for cell in notebook_v1.get("cells", [])
-        ],
+        cells=cell_defs,
         violations=[],
         valid=True,
     )
