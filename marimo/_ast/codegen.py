@@ -5,7 +5,6 @@ import ast
 import os
 import re
 import sys
-import textwrap
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from marimo import _loggers
@@ -67,7 +66,12 @@ def pop_setup_cell(
 
 
 def indent_text(text: str) -> str:
-    return textwrap.indent(text, INDENT)
+    # Use a direct join for single-level indentation for better performance
+    # Assumes INDENT does not contain newlines.
+    if not text:
+        return text
+    lines = text.splitlines(True)
+    return "".join(INDENT + line if line.strip() else line for line in lines)
 
 
 def _format_arg(arg: Any) -> str:
