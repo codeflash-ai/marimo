@@ -322,9 +322,13 @@ def get_session_cache_file(path: Path) -> Path:
 
 
 def _hash_code(code: Optional[str]) -> Optional[str]:
-    if code is None or code == "":
+    if not code:
         return None
-    return hashlib.md5(code.encode("utf-8"), usedforsecurity=False).hexdigest()
+    code_bytes = code.encode("utf-8")
+    # Avoid passing 'usedforsecurity' unless needed for compatibility,
+    # as it incurs a small overhead parsing kwargs internally.
+    hash_obj = hashlib.md5(code_bytes)
+    return hash_obj.hexdigest()
 
 
 class SessionCacheWriter(AsyncBackgroundTask):
