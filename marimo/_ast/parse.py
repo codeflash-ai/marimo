@@ -36,6 +36,16 @@ if TYPE_CHECKING:
 
     from typing_extensions import TypeAlias
 
+_ASYNC_FUNC_DEF = ast.AsyncFunctionDef
+
+_FUNC_DEF = ast.FunctionDef
+
+_CLASS_DEF = ast.ClassDef
+
+_ASYNC_WITH = ast.AsyncWith
+
+_WITH = ast.With
+
 
 FnNode: TypeAlias = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 CellNode: TypeAlias = Union[FnNode, ast.ClassDef]
@@ -878,11 +888,14 @@ def is_unparsable_cell(node: Node) -> bool:
 
 def is_body_cell(node: Node) -> bool:
     # should have decorator @app.cell, @app.function, @app.class_definition
-    return (
-        isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef, ast.ClassDef))
-        and (decorator := get_valid_decorator(node))
-        and is_cell_decorator(decorator)
-    ) or is_unparsable_cell(node)
+    # Fast-path negative checks and type-dispatch upfront to reduce work.
+    node_type = type(node)
+    if node_type in (_ASYNC_FUNC_DEF, _FUNC_DEF, _CLASS_DEF):
+        decorator = get_valid_decorator(node)
+        if decorator and is_cell_decorator(decorator):
+            return True
+    # Directly dispatch is_unparsable_cell only for non-{AsyncFunctionDef, FunctionDef, ClassDef}
+    return is_unparsable_cell(node)
 
 
 def _is_setup_call(node: Node) -> bool:
@@ -898,15 +911,20 @@ def _is_setup_call(node: Node) -> bool:
 
 
 def is_setup_cell(node: Node) -> bool:
-    return (
-        isinstance(node, (ast.AsyncWith, ast.With))
-        and len(node.items) == 1
-        and _is_setup_call(node.items[0].context_expr)
-    )
+    node_type = type(node)
+    if node_type is _ASYNC_WITH or node_type is _WITH:
+        items = node.items
+        # Only check further if singleton items to avoid unnecessary attribute access
+        if len(items) == 1 and _is_setup_call(items[0].context_expr):
+            return True
+    return False
 
 
 def is_cell(node: Optional[Node]) -> bool:
-    return bool(node and (is_setup_cell(node) or is_body_cell(node)))
+    # Node is None or not; reduce stack frame/short-circuit as soon as possible
+    if node is None:
+        return False
+    return is_setup_cell(node) or is_body_cell(node)
 
 
 def is_run_guard(node: Optional[Node]) -> bool:
