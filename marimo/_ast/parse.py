@@ -598,6 +598,9 @@ class PeekStack(Generic[U]):
             self._next = None
         return self._next
 
+    def __iter__(self) -> PeekStack[U]:
+        return self
+
 
 def _maybe_kwargs(
     node: Optional[ast.expr],
@@ -674,36 +677,56 @@ def extract_offsets_post_colon(
     # comments --- we have to use tokenize because the ast treats the first
     # line of code as the starting line of the function body, whereas we
     # want the first indented line after the signature
-    tokens = PeekStack(
-        tokenize(io.BytesIO(function_code.encode("utf-8")).readline)
-    )
+
+    # Avoid memory realloc from str.encode inside BytesIO, since tokenize can accept bytes
+    bytes_iter = io.BytesIO(function_code.encode("utf-8")).readline
+    tokens = PeekStack(tokenize(bytes_iter))
+
+    # Reduce repeated attribute access by storing references
+    type_NAME = token_types.NAME
+    type_OP = token_types.OP
+    type_NEWLINE = token_types.NEWLINE
+    type_COMMENT = token_types.COMMENT
 
     def_node: Optional[TokenInfo] = None
-    while token := next(tokens):
-        if token.type == token_types.NAME and token.string == block_start:
+    # Instead of 'while token := next(tokens):' (which calls PeekStack.__next__)
+    # we can use the PeekStack directly as an iterator through __next__
+    get_token = tokens.__next__
+    while True:
+        token = get_token()
+        if not token:
+            break
+        if token.type == type_NAME and token.string == block_start:
             def_node = token
             break
     assert def_node is not None
 
     paren_counter: Optional[int] = None
-    token = tokens.peek()
-    while token := next(tokens):
-        if token.type == token_types.OP and token.string == "(":
-            paren_counter = 1 if paren_counter is None else paren_counter + 1
-        elif token.type == token_types.OP and token.string == ")":
-            assert paren_counter is not None
-            paren_counter -= 1
+
+    # Tokens are already prepared for next iteration, so cache function references for speed
+    peek_token = tokens.peek
+    while True:
+        token = get_token()
+        if not token:
+            break
+        if token.type == type_OP:
+            if token.string == "(":
+                paren_counter = (
+                    1 if paren_counter is None else paren_counter + 1
+                )
+            elif token.string == ")":
+                assert paren_counter is not None
+                paren_counter -= 1
 
         # NB. Paren counter is initially _None_
         # So this doesn't activate until we see the first paren.
         if paren_counter == 0:
             break
         elif paren_counter is None:
-            # In the setup block case, parens are not bound to be present.
-            next_token = tokens.peek()
+            next_token = peek_token()
             if (
                 next_token
-                and next_token.type == token_types.OP
+                and next_token.type == type_OP
                 and next_token.string == ":"
             ):
                 paren_counter = 0
@@ -711,24 +734,28 @@ def extract_offsets_post_colon(
 
     assert paren_counter == 0
 
-    while token := next(tokens):
-        if token.type == token_types.OP and token.string == ":":
+    while True:
+        token = get_token()
+        if not token:
+            break
+        if token.type == type_OP and token.string == ":":
             break
 
-    after_colon = next(tokens)
+    # Only one more token is required, so get_token is fine
+    after_colon = get_token()
     assert after_colon
     start_line: int
     start_col: int
-    if after_colon.type == token_types.NEWLINE:
-        fn_body_token = next(tokens)
+    if after_colon.type == type_NEWLINE:
+        fn_body_token = get_token()
         assert fn_body_token
         start_line = fn_body_token.start[0] - 1
         start_col = 0
-    elif after_colon.type == token_types.COMMENT:
-        newline_token = next(tokens)
+    elif after_colon.type == type_COMMENT:
+        newline_token = get_token()
         assert newline_token
-        assert newline_token.type == token_types.NEWLINE
-        fn_body_token = next(tokens)
+        assert newline_token.type == type_NEWLINE
+        fn_body_token = get_token()
         assert fn_body_token
         start_line = fn_body_token.start[0] - 1
         start_col = 0
