@@ -213,7 +213,6 @@ def capture_output(
 
     # Snapshot and suppress existing handlers
     old_handlers, old_propagate = logger.handlers[:], logger.propagate
-    logger.addHandler(h)
     logger.handlers = [h]
     logger.propagate = False
 
@@ -221,7 +220,6 @@ def capture_output(
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             yield out, err, h.records
     finally:
-        logger.removeHandler(h)
         logger.handlers = old_handlers
         logger.propagate = old_propagate
 
