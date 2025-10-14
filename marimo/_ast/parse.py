@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import TypeAlias
 
+_VALID_DECORATORS_SET = {"cell", "function", "class_definition"}
+
 
 FnNode: TypeAlias = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 CellNode: TypeAlias = Union[FnNode, ast.ClassDef]
@@ -787,20 +789,22 @@ def is_equal_ast(
 def get_valid_decorator(
     node: CellNode,
 ) -> Optional[Union[ast.Attribute, ast.Call]]:
-    valid_decorators = (
-        "cell",
-        "function",
-        "class_definition",
-    )
+    # Use the precomputed set for faster lookups vs tuple
     for decorator in node.decorator_list:
-        if (
-            isinstance(decorator, ast.Call)
-            and getattr(decorator.func, "attr", None) in valid_decorators
-        ) or (
-            isinstance(decorator, ast.Attribute)
-            and decorator.attr in valid_decorators
-        ):
-            return decorator
+        # Inlining membership tests and avoiding getattr when unnecessary
+        # Optimize sequential isinstance/decorator.attr checks to minimize getattr calls
+        if isinstance(decorator, ast.Attribute):
+            attr = decorator.attr
+            if attr in _VALID_DECORATORS_SET:
+                return decorator
+        elif isinstance(decorator, ast.Call):
+            func = decorator.func
+            # Only try getattr if func is ast.Attribute
+            # Use getattr only if func is ast.Attribute to avoid slow lookup on non-Attributes
+            # This avoids a getattr call for each ast.Call unnecessarily
+            if isinstance(func, ast.Attribute):
+                if func.attr in _VALID_DECORATORS_SET:
+                    return decorator
     return None
 
 
@@ -853,36 +857,51 @@ def is_cell_decorator(
     decorator: ast.expr,
     allowed: tuple[str, ...] = ("cell", "function", "class_definition"),
 ) -> bool:
+    # We can convert allowed to set for membership checks if function is called >1 times per input;
+    # but as default is tuple and function is self-recursive, keep tuple for signature consistency.
+    # Optimize: FAST path (ast.Attribute) first, then (ast.Call).
     if isinstance(decorator, ast.Attribute):
-        return (
-            isinstance(decorator.value, ast.Name)
-            and decorator.value.id == "app"
-            and decorator.attr in allowed
-        )
+        # Fast path: fail early on common misses (type/id)
+        value = decorator.value
+        if isinstance(value, ast.Name):
+            id_ = value.id
+            if id_ == "app":
+                return decorator.attr in allowed
+        return False
     elif isinstance(decorator, ast.Call):
-        return is_cell_decorator(decorator.func)
+        # Tail recursion on decorator.func (common in decorator calls)
+        return is_cell_decorator(decorator.func, allowed)
     return False
 
 
 def is_unparsable_cell(node: Node) -> bool:
-    return (
-        isinstance(node, ast.Expr)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == "app"
-        and node.value.func.attr == "_unparsable_cell"
-        and len(node.value.args) == 1
-    )
+    # Inline type checks for efficiency, reorder to fail fast.
+    # Equivalent logic, but avoids unnecessary isinstance on nested attributes if earlier checks fail.
+    # Localize accesses for efficiency:
+    if not isinstance(node, ast.Expr):
+        return False
+    value = node.value
+    if not isinstance(value, ast.Call):
+        return False
+    func = value.func
+    if not isinstance(func, ast.Attribute):
+        return False
+    func_value = func.value
+    if not isinstance(func_value, ast.Name):
+        return False
+    if func_value.id != "app" or func.attr != "_unparsable_cell":
+        return False
+    return len(value.args) == 1
 
 
 def is_body_cell(node: Node) -> bool:
-    # should have decorator @app.cell, @app.function, @app.class_definition
-    return (
-        isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef, ast.ClassDef))
-        and (decorator := get_valid_decorator(node))
-        and is_cell_decorator(decorator)
-    ) or is_unparsable_cell(node)
+    # Fast path: avoid function call to get_valid_decorator if type fails
+    # No change to behavioral logic.
+    if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef, ast.ClassDef)):
+        decorator = get_valid_decorator(node)
+        if decorator and is_cell_decorator(decorator):
+            return True
+    return is_unparsable_cell(node)
 
 
 def _is_setup_call(node: Node) -> bool:
