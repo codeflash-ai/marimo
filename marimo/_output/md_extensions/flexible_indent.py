@@ -79,8 +79,13 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
 
     def _get_list_depth(self, indent_str: str, base_level: int = 2) -> int:
         """Calculate the nesting depth of a list item."""
-        normalized = indent_str.replace("\t", self.FOUR_SPACES)
-        indent_count = len(normalized)
+        if "\t" in indent_str:
+            tab_count = indent_str.count("\t")
+            indent_count = len(indent_str) + tab_count * (
+                len(self.FOUR_SPACES) - 1
+            )
+        else:
+            indent_count = len(indent_str)
 
         if indent_count == 0:
             return 0
