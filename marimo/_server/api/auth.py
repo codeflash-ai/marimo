@@ -112,13 +112,18 @@ def raise_basic_auth_error() -> HTTPException:
 def on_auth_error(
     request: HTTPConnection, error: AuthenticationError
 ) -> JSONResponse:
-    del request
-    del error
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={"detail": "Authorization header required"},
-        headers={"WWW-Authenticate": "Basic"},
-    )
+    # Use a static response instance for performance, as this response is
+    # always the same and is stateless (no request-specific info returned).
+    # This avoids rebuilding the same JSONResponse object on each call.
+    # This is safe because JSONResponse objects do not mutate their content
+    # or headers after creation.
+    if not hasattr(on_auth_error, "_static_response"):
+        on_auth_error._static_response = JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Authorization header required"},
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return on_auth_error._static_response
 
 
 # This is random/new for each server instance
