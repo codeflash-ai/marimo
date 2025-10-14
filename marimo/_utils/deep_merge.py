@@ -27,7 +27,14 @@ def deep_merge(
     original: dict[Any, Any], update: dict[Any, Any]
 ) -> dict[Any, Any]:
     """Deep merge of two dicts."""
-    return {
-        key: _merge_key(original, update, key)
-        for key in set(original.keys()).union(set(update.keys()))
-    }
+    # Optimization: avoid creating intermediate sets by using views directly
+    # union of keys in both dicts, but with less overhead than set union
+    seen = set()
+    result: dict[Any, Any] = {}
+    for key in original:
+        result[key] = _merge_key(original, update, key)
+        seen.add(key)
+    for key in update:
+        if key not in seen:
+            result[key] = _merge_key(original, update, key)
+    return result
