@@ -25,7 +25,20 @@ def uri_encode_component(code: str) -> str:
 
 def uri_decode_component(code: str) -> str:
     """Equivalent to `decodeURIComponent` in JavaScript."""
-    return urllib.parse.unquote(code)
+    # Optimization: use unquote_to_bytes when possible,
+    # then decode to str with 'utf-8'.
+    # This avoids intermediate string allocations for very large inputs.
+    # For small strings, it's negligible, but for codebases handling
+    # many decoded URIs, this can be beneficial.
+    try:
+        # urllib.parse.unquote_to_bytes is available in Python 3.10
+        # Only use it if the input contains % (needs decoding).
+        if "%" in code:
+            return urllib.parse.unquote_to_bytes(code).decode("utf-8")
+        return code
+    except Exception:
+        # Fallback to original if decoding fails (behavior preservation)
+        return urllib.parse.unquote(code)
 
 
 def normalize_dimension(value: Union[int, float, str, None]) -> Optional[str]:
