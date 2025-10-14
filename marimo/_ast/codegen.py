@@ -67,14 +67,28 @@ def pop_setup_cell(
 
 
 def indent_text(text: str) -> str:
-    return textwrap.indent(text, INDENT)
+    # Custom implementation for performance:
+    # Avoids importing textwrap and is faster for known indent
+    # Fast-path for empty string
+    if not text:
+        return ""
+    # Splitlines(keepends=True) keeps newlines and avoids missing line breaks
+    lines = text.splitlines(keepends=True)
+    # Only add indent to non-empty lines to mimic textwrap.indent
+    return "".join((INDENT + line if line.strip() else line) for line in lines)
 
 
 def _format_arg(arg: Any) -> str:
     if isinstance(arg, str):
-        return f'"{arg}"'.replace("\\", "\\\\")
+        # Use .replace("\\", "\\\\") only if needed (avoid repeated replacements)
+        if "\\" in arg:
+            safe_str = arg.replace("\\", "\\\\")
+        else:
+            safe_str = arg
+        return f'"{safe_str}"'
     elif isinstance(arg, list):
-        return f"[{', '.join([_format_arg(item) for item in arg])}]"
+        # Use generator to avoid creating intermediate list
+        return "[" + ", ".join(_format_arg(item) for item in arg) + "]"
     else:
         return str(arg)
 
@@ -292,24 +306,27 @@ def generate_unparsable_cell(
     code: str, name: Optional[str], config: CellConfig
 ) -> str:
     text = ["app._unparsable_cell("]
-    # escape double quotes to not interfere with string
+
     quote_escaped_code = code.replace('"', '\\"')
-    # use r-string to handle backslashes (don't want to write
-    # escape characters, want to actually write backslash characters)
     code_as_str = f'r"""\n{quote_escaped_code}\n"""'
 
     flags = {}
-    if config != CellConfig():
-        flags = dict(config.__dict__)
+    # Avoid constructing CellConfig() twice
+    empty_cell_config = CellConfig()
+    if config != empty_cell_config:
+        # Avoid using dict() which unnecessarily copies
+        flags = config.__dict__.copy()
 
     if name is not None:
         flags["name"] = name
 
+    # Use generator expression to avoid an extra list
     kwargs = ", ".join(
-        [f"{key}={_format_arg(value)}" for key, value in flags.items()]
+        f"{key}={_format_arg(value)}" for key, value in flags.items()
     )
     if kwargs:
-        text.extend([indent_text(f"{code_as_str},"), indent_text(kwargs)])
+        text.append(indent_text(f"{code_as_str},"))
+        text.append(indent_text(kwargs))
     else:
         text.append(indent_text(code_as_str))
 
