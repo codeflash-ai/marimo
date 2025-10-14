@@ -809,11 +809,17 @@ def is_marimo_import(node: ast.Import) -> bool:
 
 
 def is_string(node: Node) -> bool:
-    return (
-        isinstance(node, ast.Expr)
-        and isinstance(node.value, ast.Constant)
-        and isinstance(node.value.value, str)
-    )
+    # Use local variable bindings to avoid redundant attribute lookups,
+    # which saves significant time in tight type-checking patterns.
+    # Fast path all conditions and short-circuit if any condition fails.
+    # This avoids unnecessary isinstance checks when early checks fail.
+    if not isinstance(node, ast.Expr):
+        return False
+    value = node.value
+    if not isinstance(value, ast.Constant):
+        return False
+    val = value.value
+    return isinstance(val, str)
 
 
 def is_app_def(node: Node, import_alias: str = "marimo") -> bool:
