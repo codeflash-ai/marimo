@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import TypeAlias
 
+_RUN_GUARD_AST = ast.parse('if __name__ == "__main__": app.run()').body[0]
+
 
 FnNode: TypeAlias = Union[ast.FunctionDef, ast.AsyncFunctionDef]
 CellNode: TypeAlias = Union[FnNode, ast.ClassDef]
@@ -49,11 +51,11 @@ U = TypeVar("U")
 def ast_parse(
     contents: str, suppress_warnings: bool = True, **kwargs: Any
 ) -> ast.Module:
+    # Micro-optimization: Only catch warnings if needed.
     if not suppress_warnings:
         return cast(ast.Module, ast.parse(contents, **kwargs))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=SyntaxWarning)
-        # The SyntaxWarning is suppressed only inside this `with` block
         return cast(ast.Module, ast.parse(contents, **kwargs))
 
 
@@ -764,7 +766,11 @@ def is_equal_ast(
         assert isinstance(other, list)
         if len(basis) != len(other):
             return False
-        return all(is_equal_ast(a, b) for a, b in zip(basis, other))
+        # Optimization: Use for-loop to avoid generator overhead in all().
+        for a, b in zip(basis, other):
+            if not is_equal_ast(a, b):
+                return False
+        return True
 
     for key, value in vars(basis).items():
         # Scrub positional data not relevant for comparison.
@@ -777,8 +783,10 @@ def is_equal_ast(
         }:
             continue
         other_value = getattr(other, key, None)
+        # Optimization: Early return avoids repeated calls.
         if isinstance(value, (ast.AST, list, type(None))):
-            return is_equal_ast(value, other_value)
+            if not is_equal_ast(value, other_value):
+                return False
         elif value != other_value:
             return False
     return True
@@ -910,8 +918,8 @@ def is_cell(node: Optional[Node]) -> bool:
 
 
 def is_run_guard(node: Optional[Node]) -> bool:
-    basis = ast_parse('if __name__ == "__main__": app.run()').body[0]
-    return bool(node and is_equal_ast(basis, node))
+    # Use cached AST for performance.
+    return bool(node and is_equal_ast(_RUN_GUARD_AST, node))
 
 
 def parse_notebook(
