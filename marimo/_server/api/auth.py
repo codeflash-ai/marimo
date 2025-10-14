@@ -134,7 +134,8 @@ class CookieSession:
         self.session_state = session_state
 
     def get_access_token(self) -> str:
-        access_token: str = self.session_state.get("access_token", "")
+        # Direct lookup with default value; optimized for single key access
+        access_token = self.session_state.get("access_token", "")
         return access_token
 
     def get_username(self) -> str:
