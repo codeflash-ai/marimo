@@ -23,6 +23,12 @@ if TYPE_CHECKING:
 
 from marimo._server.api.deps import AppState
 
+_AUTH_ERROR_KWARGS = {
+    "status_code": status.HTTP_401_UNAUTHORIZED,
+    "detail": "Authorization header required",
+    "headers": {"WWW-Authenticate": "Basic"},
+}
+
 LOGGER = _loggers.marimo_logger()
 TOKEN_QUERY_PARAM = "access_token"
 
@@ -102,11 +108,7 @@ def _parse_basic_auth_header(
 
 
 def raise_basic_auth_error() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authorization header required",
-        headers={"WWW-Authenticate": "Basic"},
-    )
+    return HTTPException(**_AUTH_ERROR_KWARGS)
 
 
 def on_auth_error(
