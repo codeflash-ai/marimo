@@ -16,6 +16,7 @@ from marimo._output.rich_help import mddoc
 from marimo._plugins.core.web_component import JSONType
 from marimo._plugins.ui._core.ui_element import UIElement
 from marimo._plugins.ui._impl.chat.utils import from_chat_message_dict
+from marimo._runtime.context import get_context
 from marimo._runtime.context.types import ContextNotInitializedError
 from marimo._runtime.functions import EmptyArgs, Function
 from marimo._runtime.requests import SetUIElementValueRequest
@@ -210,17 +211,19 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
     async def _send_prompt(self, args: SendMessageRequest) -> str:
         messages = args.messages
 
+        model = self._model
+        parameters = inspect.signature(model).parameters
         # If the model is a callable that takes a single argument,
         # call it with just the messages.
         response: object
         if (
-            callable(self._model)
-            and not isinstance(self._model, type)
-            and len(inspect.signature(self._model).parameters) == 1
+            callable(model)
+            and not isinstance(model, type)
+            and len(parameters) == 1
         ):
-            response = self._model(messages)  # type: ignore
+            response = model(messages)  # type: ignore
         else:
-            response = self._model(messages, args.config)
+            response = model(messages, args.config)
 
         if inspect.isawaitable(response):
             response = await response
@@ -240,9 +243,8 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
             response = latest_response
 
         response_message = ChatMessage(role="assistant", content=response)
-        self._chat_history = messages + [response_message]
-
-        from marimo._runtime.context import get_context
+        new_chat_history = messages + [response_message]
+        self._chat_history = new_chat_history
 
         # The frontend doesn't manage state, so we have to manually enqueue
         # a control request.
