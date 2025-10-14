@@ -10,6 +10,12 @@ if TYPE_CHECKING:
 
 from marimo import _loggers
 
+_LINE_COL_PATTERN = re.compile(r"Line (\d+), Col: (\d+)")
+
+_LINE_ONLY_PATTERN = re.compile(r"LINE (\d+):")
+
+_SQLGLOT_PATTERN = re.compile(r"line (\d+), col (\d+)", re.IGNORECASE)
+
 LOGGER = _loggers.marimo_logger()
 
 
@@ -103,7 +109,7 @@ def _extract_sql_position(
 ) -> tuple[Optional[int], Optional[int]]:
     """Extract line and column position from SQL exception message."""
     # SqlGlot format: "Line 1, Col: 15"
-    line_col_match = re.search(r"Line (\d+), Col: (\d+)", exception_msg)
+    line_col_match = _LINE_COL_PATTERN.search(exception_msg)
     if line_col_match:
         return (
             int(line_col_match.group(1)) - 1,  # Convert to 0-based
@@ -111,7 +117,7 @@ def _extract_sql_position(
         )
 
     # DuckDB format: "LINE 4:" (line only)
-    line_only_match = re.search(r"LINE (\d+):", exception_msg)
+    line_only_match = _LINE_ONLY_PATTERN.search(exception_msg)
     if line_only_match:
         return (
             int(line_only_match.group(1)) - 1,  # Convert to 0-based
@@ -119,9 +125,7 @@ def _extract_sql_position(
         )
 
     # SQLGlot format variations
-    sqlglot_match = re.search(
-        r"line (\d+), col (\d+)", exception_msg, re.IGNORECASE
-    )
+    sqlglot_match = _SQLGLOT_PATTERN.search(exception_msg)
     if sqlglot_match:
         return (
             int(sqlglot_match.group(1)) - 1,
@@ -147,23 +151,24 @@ def create_sql_error_metadata(
     sql_line, sql_col = _extract_sql_position(exception_msg)
 
     # Truncate long SQL content
-    truncated_sql = sql_content
     if sql_content and len(sql_content) > 200:
         truncated_sql = sql_content[:200] + "..."
+    else:
+        truncated_sql = sql_content
 
     # Create clean error message (first line only)
     clean_message = exception_msg.split("\n", 1)[0]
 
-    # Extract helpful DuckDB hints separately (including multiline hints)
+    # Extract helpful DuckDB hints (including multiline hints)
     hint = None
-    lines = exception_msg.split("\n")
-    hint_lines = []
-
-    for line in lines[1:]:
-        hint_lines.append(line.strip())
-
-    if hint_lines:
-        hint = "\n".join(hint_lines)
+    if "\n" in exception_msg:
+        # Only split/strip if there's more than one line for efficiency
+        lines = exception_msg.split("\n")
+        hint_lines = [line.strip() for line in lines[1:]]
+        if hint_lines:
+            hint = "\n".join(hint_lines)
+    else:
+        hint_lines = []
 
     return SQLErrorMetadata(
         lint_rule=rule_code,
