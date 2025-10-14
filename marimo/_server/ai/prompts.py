@@ -48,16 +48,18 @@ def _format_schema_info(tables: Optional[list[SchemaTable]]) -> str:
     if not tables:
         return ""
 
-    schema_info = "\n\n## Available schema:\n"
+    # Use a list to build lines, which is significantly faster than += for string concatenation
+    lines = ["\n\n## Available schema:\n"]
     for schema in tables:
-        schema_info += f"- Table: {schema.name}\n"
+        lines.append(f"- Table: {schema.name}\n")
         for col in schema.columns:
-            schema_info += f"  - Column: {col.name}\n"
-            schema_info += f"    - Type: {col.type}\n"
+            lines.append(f"  - Column: {col.name}\n")
+            lines.append(f"    - Type: {col.type}\n")
             if col.sample_values:
-                samples = ", ".join(f"{v}" for v in col.sample_values)
-                schema_info += f"    - Sample values: {samples}\n"
-    return schema_info
+                # Avoid creating a new generator for each sample, use str instead of f-string for each value
+                samples = ", ".join(map(str, col.sample_values))
+                lines.append(f"    - Sample values: {samples}\n")
+    return "".join(lines)
 
 
 def _format_plain_text(plain_text: str) -> str:
