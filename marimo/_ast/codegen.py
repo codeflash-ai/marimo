@@ -178,12 +178,15 @@ def to_annotated_string(
     response: dict[str, str] = {}
     if not variable_data:
         return response
+    allowed_refs = frozenset(allowed_refs)
+    variable_data_get = variable_data.get
     for name in names:
-        if name in variable_data and variable_data[name]:
-            variable = variable_data[name]
+        variable = variable_data_get(name)
+        if variable:
             annotation = variable.annotation_data
             if annotation:
-                if annotation.refs - allowed_refs:
+                # Using set difference shortcut: check subset instead
+                if not annotation.refs <= allowed_refs:
                     response[name] = f'"{annotation.repr}"'
                 else:
                     response[name] = annotation.repr
