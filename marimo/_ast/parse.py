@@ -1041,7 +1041,8 @@ EXPECTED_RUN_GUARD_VIOLATION = "Expected run guard statement"
 
 
 def is_non_marimo_python_script(notebook: NotebookSerialization) -> bool:
-    return any(
-        (v.description == NON_MARIMO_PYTHON_SCRIPT_VIOLATION)
-        for v in notebook.violations
-    )
+    desc = NON_MARIMO_PYTHON_SCRIPT_VIOLATION
+    for v in notebook.violations:
+        if v.description == desc:
+            return True
+    return False
