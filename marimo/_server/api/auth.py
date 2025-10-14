@@ -35,44 +35,39 @@ def validate_auth(
     conn: HTTPConnection, form_dict: Optional[dict[str, str]] = None
 ) -> bool:
     state = AppState.from_app(conn.app)
-    auth_token = str(state.session_manager.auth_token)
+    # Assume state.session_manager.auth_token is already str, no need for str() conversion
+    auth_token = state.session_manager.auth_token
 
-    # Check for session cookie
     cookie_session = CookieSession(conn.session)
 
-    # Validate the cookie
+    # Fast session cookie check
     if cookie_session.get_access_token() == auth_token:
         return True  # Success
 
-    # Check for access_token
-    if TOKEN_QUERY_PARAM in conn.query_params:
-        # Validate the access_token
-        if conn.query_params[TOKEN_QUERY_PARAM] == auth_token:
-            LOGGER.debug("Validated access_token from query param")
-            # Set the cookie
-            cookie_session.set_access_token(auth_token)
-            return True  # Success
+    # Fast path: access_token in query params
+    token_in_query = conn.query_params.get(TOKEN_QUERY_PARAM)
+    if token_in_query is not None and token_in_query == auth_token:
+        LOGGER.debug("Validated access_token from query param")
+        cookie_session.set_access_token(auth_token)
+        return True  # Success
 
-    # Check for form data
+    # Fast path: password in form data
     if form_dict is not None:
-        # Validate the access_token
         password = form_dict.get("password")
-        if password == auth_token:
+        if password is not None and password == auth_token:
             LOGGER.debug("Validated access_token from form data")
-            # Set the cookie
             cookie_session.set_access_token(auth_token)
             return True
-        else:
+        if password is not None and password != auth_token:
             LOGGER.warning("Invalid password from form data.")
             return False
 
-    # Check for basic auth
-    auth = conn.headers.get("Authorization")
-    if auth is not None:
-        username, password = _parse_basic_auth_header(auth)
-        if username and password == auth_token:
+    # Fast path: basic auth
+    auth_header = conn.headers.get("Authorization")
+    if auth_header is not None:
+        username, password = _parse_basic_auth_header(auth_header)
+        if username is not None and password == auth_token:
             LOGGER.debug("Validated basic auth from header")
-            # Set the cookie
             cookie_session.set_access_token(auth_token)
             cookie_session.set_username(username)
             return True  # Success
@@ -85,19 +80,19 @@ def _parse_basic_auth_header(
     header: str,
 ) -> tuple[Optional[str], Optional[str]]:
     scheme, _, credentials = header.partition(" ")
-
     if scheme.lower() != "basic":
         LOGGER.debug("Invalid auth scheme: %s", scheme)
         return None, None
+    try:
+        decoded = base64.b64decode(credentials).decode("utf-8")
+    except (base64.binascii.Error, UnicodeDecodeError):
+        return None, None
 
-    decoded = base64.b64decode(credentials).decode("utf-8")
     username, _, password = decoded.partition(":")
-
     if not password:
         return None, None
 
     LOGGER.debug("Validated basic auth for user: %s", username)
-
     return username, password
 
 
