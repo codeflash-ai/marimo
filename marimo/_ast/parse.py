@@ -853,13 +853,13 @@ def is_cell_decorator(
     decorator: ast.expr,
     allowed: tuple[str, ...] = ("cell", "function", "class_definition"),
 ) -> bool:
-    if isinstance(decorator, ast.Attribute):
+    if type(decorator) is ast.Attribute:
         return (
-            isinstance(decorator.value, ast.Name)
+            type(decorator.value) is ast.Name
             and decorator.value.id == "app"
             and decorator.attr in allowed
         )
-    elif isinstance(decorator, ast.Call):
+    elif type(decorator) is ast.Call:
         return is_cell_decorator(decorator.func)
     return False
 
