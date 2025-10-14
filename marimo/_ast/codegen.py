@@ -6,7 +6,7 @@ import os
 import re
 import sys
 import textwrap
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypeAlias
 
 from marimo import _loggers
 from marimo._ast.app_config import _AppConfig
@@ -115,9 +115,9 @@ def format_tuple_elements(
     if len(elems) == 1:
         elems = (elems[0].strip(","),)
 
-    multiline_tuple = "\n".join(
-        [left, indent_text(",\n".join(elems)) + ",", right]
-    )
+    joined = ",\n".join(elems)
+    indented = INDENT + joined.replace("\n", "\n" + INDENT) + ","
+    multiline_tuple = f"{left}\n{indented}\n{right}"
     return maybe_indent(code.replace("(...)", multiline_tuple))
 
 
