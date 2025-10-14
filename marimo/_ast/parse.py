@@ -865,14 +865,23 @@ def is_cell_decorator(
 
 
 def is_unparsable_cell(node: Node) -> bool:
+    # Fast path: check top-level type first before nested dereferences
+    if not isinstance(node, ast.Expr):
+        return False
+    value = node.value
+    if not isinstance(value, ast.Call):
+        return False
+    func = value.func
+    if not isinstance(func, ast.Attribute):
+        return False
+    func_value = func.value
+    if not isinstance(func_value, ast.Name):
+        return False
+    # Check strings and length only after successful type checks
     return (
-        isinstance(node, ast.Expr)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == "app"
-        and node.value.func.attr == "_unparsable_cell"
-        and len(node.value.args) == 1
+        func_value.id == "app"
+        and func.attr == "_unparsable_cell"
+        and len(value.args) == 1
     )
 
 
