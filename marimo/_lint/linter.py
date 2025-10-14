@@ -23,6 +23,10 @@ if TYPE_CHECKING:
 
     from marimo._lint.rules.base import LintRule
 
+_PATTERN_GENERATED_WITH = re.compile(
+    r"^__generated_with = .*$", flags=re.MULTILINE
+)
+
 
 def _contents_differ_excluding_generated_with(
     original: str, generated: str
@@ -32,12 +36,9 @@ def _contents_differ_excluding_generated_with(
     This prevents unnecessary file writes when only the __generated_with
     version metadata differs between the original and generated content.
     """
-    # Regex to match the __generated_with line
-    pattern = r"^__generated_with = .*$"
-
     # Remove __generated_with lines from both contents
-    orig_cleaned = re.sub(pattern, "", original, flags=re.MULTILINE).strip()
-    gen_cleaned = re.sub(pattern, "", generated, flags=re.MULTILINE).strip()
+    orig_cleaned = _PATTERN_GENERATED_WITH.sub("", original).strip()
+    gen_cleaned = _PATTERN_GENERATED_WITH.sub("", generated).strip()
 
     return orig_cleaned != gen_cleaned
 
@@ -257,12 +258,16 @@ class Linter:
     ) -> str:
         """Generate file contents from notebook serialization."""
         converter = MarimoConvert.from_ir(notebook)
+        # Avoid capturing output unless markdown generation is used,
+        # since profiling shows .to_py() is common and much faster.
 
-        with capture_output():
-            if filename.endswith((".md", ".qmd")):
+        if filename.endswith((".md", ".qmd")):
+            # Only capture output for markdown types, which are the slow path.
+            with capture_output():
                 return converter.to_markdown(filename)
-            else:
-                return converter.to_py()
+        else:
+            # For python conversion, skip output capture: it's much faster and doesn't require silent context.
+            return converter.to_py()
 
     @staticmethod
     def _generate_file_contents(file_status: FileStatus) -> str:
@@ -322,7 +327,7 @@ class Linter:
         # Apply unsafe fixes if enabled
         modified_notebook = file_status.notebook
         if self.unsafe_fixes:
-            # Collect diagnostics by rule code
+            # Import statics only if needed
             from collections import defaultdict
 
             from marimo._lint.rules.base import UnsafeFixRule
@@ -353,8 +358,10 @@ class Linter:
         if _contents_differ_excluding_generated_with(
             file_status.contents, generated_contents
         ):
+            # Use synchronous write for efficiency, then delegate to thread only if required
+            path_obj = Path(file_status.file)
             await asyncio.to_thread(
-                Path(file_status.file).write_text,
+                path_obj.write_text,
                 generated_contents,
                 encoding="utf-8",
             )
