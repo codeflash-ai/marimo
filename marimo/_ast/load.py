@@ -151,20 +151,18 @@ def get_notebook_status(filename: str) -> LoadResult:
     Raises:
         SyntaxError: If the file contains a syntax error
     """
-    path = Path(filename)
-
     contents = _maybe_contents(filename)
     if not contents:
         return LoadResult(status="empty", contents=contents)
 
     notebook: Optional[NotebookSerialization] = None
-    if path.suffix in (".md", ".qmd"):
+    if filename.endswith((".md", ".qmd")):
         from marimo._convert.markdown.markdown import (
             convert_from_md_to_marimo_ir,
         )
 
         notebook = convert_from_md_to_marimo_ir(contents)
-    elif path.suffix == ".py":
+    elif filename.endswith(".py"):
         notebook = parse_notebook(contents, filepath=filename)
     else:
         raise MarimoFileError("File must end with .py, .md, or .qmd.")
