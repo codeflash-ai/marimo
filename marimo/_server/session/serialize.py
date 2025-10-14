@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
@@ -324,6 +325,12 @@ def get_session_cache_file(path: Path) -> Path:
 def _hash_code(code: Optional[str]) -> Optional[str]:
     if code is None or code == "":
         return None
+    return _cached_hash_code(code)
+
+
+# Use LRU cache to optimize repeated hash computations
+@lru_cache(maxsize=128)
+def _cached_hash_code(code: str) -> str:
     return hashlib.md5(code.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
