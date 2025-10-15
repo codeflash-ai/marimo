@@ -76,8 +76,13 @@ def create_proxy_error_handler(
 ) -> Callable[[ConnectionRefusedError, str], Response]:
     """Create a custom error handler that wraps the default with a custom message."""
 
-    def handler(error: ConnectionRefusedError, path: str) -> Response:
-        return _handle_proxy_connection_error(error, path, custom_message)
+    # Inline the handler function for reduced call overhead
+    def handler(
+        error: ConnectionRefusedError,
+        path: str,
+        _custom_message=custom_message,
+    ) -> Response:
+        return _handle_proxy_connection_error(error, path, _custom_message)
 
     return handler
 
