@@ -31,28 +31,35 @@ class BreaklessListsPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
         if not lines:
             return lines
 
+        # Pre-localize for speed
+        LIST_START_PATTERN = self.LIST_START_PATTERN
+        append = [].append  # dummy to help with editor highlighting
+
+        n = len(lines)
         result_lines: list[str] = []
-        i = 0
+        append = (
+            result_lines.append
+        )  # localize for speed, reduces attribute lookup in loop
 
-        while i < len(lines):
+        # Use a look-ahead with enumerate that goes to (n-1), and handle last line after loop.
+        for i in range(n - 1):
             current_line = lines[i]
-            result_lines.append(current_line)
+            next_line = lines[i + 1]
+            append(current_line)
 
-            # Check if we need to look ahead for a list
-            if i + 1 < len(lines):
-                next_line = lines[i + 1]
+            # Only check for blank-insert opportunities if current line non-empty & next starts a list
+            stripped_current = current_line.strip()
+            if (
+                stripped_current  # Current line has content
+                and LIST_START_PATTERN.match(next_line)
+            ):
+                # Insert blank line to enable list interruption
+                # (Original code's redundant second strip isn't needed: already checked above)
+                append("")
 
-                # If current line is not empty and next line starts a list
-                if (
-                    current_line.strip()  # Current line has content
-                    and self.LIST_START_PATTERN.match(next_line)
-                ):  # Next line starts a list
-                    # Check if there's already a blank line
-                    if current_line.strip():
-                        # Insert blank line to enable list interruption
-                        result_lines.append("")
-
-            i += 1
+        # Add the last line (cannot be followed by a list)
+        if n > 0:
+            append(lines[-1])
 
         return result_lines
 
