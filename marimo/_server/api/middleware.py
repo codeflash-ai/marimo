@@ -279,34 +279,38 @@ class _AsyncHTTPClient:
         return request
 
     async def _collect_body(self, request: _URLRequest) -> bytes:
-        if not hasattr(request, "data") or request.data is None:
+        # Fast path: no data
+        data = getattr(request, "data", None)
+        if data is None:
             return b""
 
-        if isinstance(request.data, AsyncIterable):
-            chunks: list[bytes] = []
+        # Handle AsyncIterable efficiently
+        if isinstance(data, AsyncIterable):
+            # Use a bytearray for efficient concatenation
+            chunks = bytearray()
             try:
-                async for chunk in request.data:
-                    if isinstance(chunk, str):
-                        chunks.append(chunk.encode())
-                    elif isinstance(chunk, bytes):
-                        chunks.append(chunk)
+                async for chunk in data:
+                    if isinstance(chunk, bytes):
+                        chunks += chunk
+                    elif isinstance(chunk, str):
+                        chunks += chunk.encode()
                     else:
-                        # Handle unexpected types
-                        chunks.append(str(chunk).encode())
-                return b"".join(chunks)
+                        chunks += str(chunk).encode()
+                return bytes(chunks)
             except Exception as e:
                 LOGGER.error(f"Error collecting async request body: {e}")
                 raise
-        if isinstance(request.data, str):
-            return request.data.encode()
-        if isinstance(request.data, bytes):
-            return request.data
-        if hasattr(request.data, "read"):
-            return request.data.read()  # type: ignore
 
-        raise ValueError(
-            f"Unsupported request data type: {type(request.data)}"
-        )
+        # Handle strings, bytes, file-like objects
+        if isinstance(data, str):
+            return data.encode()
+        if isinstance(data, bytes):
+            return data
+        if hasattr(data, "read"):
+            return data.read()  # type: ignore
+
+        # Fallback for unsupported data
+        raise ValueError(f"Unsupported request data type: {type(data)}")
 
     def _send_request(self, request: _URLRequest, body: bytes) -> HTTPResponse:
         from http.client import HTTPConnection
