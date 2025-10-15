@@ -282,14 +282,26 @@ class _AsyncHTTPClient:
         if not hasattr(request, "data") or request.data is None:
             return b""
 
-        if isinstance(request.data, AsyncIterable):
-            chunks: list[bytes] = []
+        data = request.data
+
+        # Fast path for str, bytes, and file-like before checking AsyncIterable
+        if isinstance(data, str):
+            return data.encode()
+        if isinstance(data, bytes):
+            return data
+        if hasattr(data, "read"):
+            return data.read()  # type: ignore
+        # The isinstance(..., AsyncIterable) check is relatively expensive,
+        # but must come AFTER str/bytes/file-like fast path.
+        if isinstance(data, AsyncIterable):
+            # Preallocate list with rough estimation if possible
+            chunks = []
             try:
-                async for chunk in request.data:
-                    if isinstance(chunk, str):
-                        chunks.append(chunk.encode())
-                    elif isinstance(chunk, bytes):
+                async for chunk in data:
+                    if isinstance(chunk, bytes):
                         chunks.append(chunk)
+                    elif isinstance(chunk, str):
+                        chunks.append(chunk.encode())
                     else:
                         # Handle unexpected types
                         chunks.append(str(chunk).encode())
@@ -297,16 +309,8 @@ class _AsyncHTTPClient:
             except Exception as e:
                 LOGGER.error(f"Error collecting async request body: {e}")
                 raise
-        if isinstance(request.data, str):
-            return request.data.encode()
-        if isinstance(request.data, bytes):
-            return request.data
-        if hasattr(request.data, "read"):
-            return request.data.read()  # type: ignore
 
-        raise ValueError(
-            f"Unsupported request data type: {type(request.data)}"
-        )
+        raise ValueError(f"Unsupported request data type: {type(data)}")
 
     def _send_request(self, request: _URLRequest, body: bytes) -> HTTPResponse:
         from http.client import HTTPConnection
@@ -343,6 +347,7 @@ class _AsyncHTTPClient:
 
         for attempt in range(max_retries + 1):
             try:
+                # The lambda is necessary if self._send_request needs to be passed
                 response = await loop.run_in_executor(
                     None, lambda: self._send_request(request, body)
                 )
