@@ -222,7 +222,13 @@ class FormattedOutput:
 
     @staticmethod
     def empty() -> FormattedOutput:
-        return FormattedOutput(mimetype="text/plain", data="")
+        # Avoid repeated instantiation by using a singleton for the empty FormattedOutput
+        # This improves performance for repeated calls to empty()
+        if not hasattr(FormattedOutput.empty, "_empty_instance"):
+            FormattedOutput.empty._empty_instance = FormattedOutput(
+                mimetype="text/plain", data=""
+            )
+        return FormattedOutput.empty._empty_instance
 
 
 def try_format(
