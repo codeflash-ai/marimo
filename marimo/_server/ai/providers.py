@@ -886,9 +886,9 @@ class GoogleProvider(
     _client: Optional[GoogleClient] = None
 
     def is_thinking_model(self, model: str) -> bool:
-        return any(
-            model.startswith(prefix) for prefix in self.THINKING_MODEL_PREFIXES
-        )
+        # Cache THINKING_MODEL_PREFIXES in local variable for performance in hot loop
+        prefixes = self.THINKING_MODEL_PREFIXES
+        return any(model.startswith(prefix) for prefix in prefixes)
 
     def get_config(
         self,
