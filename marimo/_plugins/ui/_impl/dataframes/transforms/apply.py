@@ -19,43 +19,39 @@ from marimo._plugins.ui._impl.dataframes.transforms.types import (
 )
 from marimo._utils.assert_never import assert_never
 
+_transform_type_to_handler_method = {
+    TransformType.COLUMN_CONVERSION: TransformHandler.handle_column_conversion,
+    TransformType.RENAME_COLUMN: TransformHandler.handle_rename_column,
+    TransformType.SORT_COLUMN: TransformHandler.handle_sort_column,
+    TransformType.FILTER_ROWS: TransformHandler.handle_filter_rows,
+    TransformType.GROUP_BY: TransformHandler.handle_group_by,
+    TransformType.AGGREGATE: TransformHandler.handle_aggregate,
+    TransformType.SELECT_COLUMNS: TransformHandler.handle_select_columns,
+    TransformType.SHUFFLE_ROWS: TransformHandler.handle_shuffle_rows,
+    TransformType.SAMPLE_ROWS: TransformHandler.handle_sample_rows,
+    TransformType.EXPLODE_COLUMNS: TransformHandler.handle_explode_columns,
+    TransformType.EXPAND_DICT: TransformHandler.handle_expand_dict,
+    TransformType.UNIQUE: TransformHandler.handle_unique,
+}
+
 T = TypeVar("T")
 
 
 def _handle(df: T, handler: TransformHandler[T], transform: Transform) -> T:
-    if transform.type is TransformType.COLUMN_CONVERSION:
-        return handler.handle_column_conversion(df, transform)
-    if transform.type is TransformType.RENAME_COLUMN:
-        return handler.handle_rename_column(df, transform)
-    if transform.type is TransformType.SORT_COLUMN:
-        return handler.handle_sort_column(df, transform)
-    if transform.type is TransformType.FILTER_ROWS:
-        return handler.handle_filter_rows(df, transform)
-    if transform.type is TransformType.GROUP_BY:
-        return handler.handle_group_by(df, transform)
-    if transform.type is TransformType.AGGREGATE:
-        return handler.handle_aggregate(df, transform)
-    if transform.type is TransformType.SELECT_COLUMNS:
-        return handler.handle_select_columns(df, transform)
-    if transform.type is TransformType.SHUFFLE_ROWS:
-        return handler.handle_shuffle_rows(df, transform)
-    if transform.type is TransformType.SAMPLE_ROWS:
-        return handler.handle_sample_rows(df, transform)
-    if transform.type is TransformType.EXPLODE_COLUMNS:
-        return handler.handle_explode_columns(df, transform)
-    if transform.type is TransformType.EXPAND_DICT:
-        return handler.handle_expand_dict(df, transform)
-    if transform.type is TransformType.UNIQUE:
-        return handler.handle_unique(df, transform)
+    method = _transform_type_to_handler_method.get(transform.type)
+    if method is not None:
+        # method is the static handler, call with handler and all required args
+        return method(handler, df, transform)
     assert_never(transform.type)
 
 
 def _apply_transforms(
     df: T, handler: TransformHandler[T], transforms: Transformations
 ) -> T:
-    if not transforms.transforms:
+    transforms_list = transforms.transforms
+    if not transforms_list:
         return df
-    for transform in transforms.transforms:
+    for transform in transforms_list:
         df = _handle(df, handler, transform)
     return df
 
