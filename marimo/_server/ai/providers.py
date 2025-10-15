@@ -730,9 +730,11 @@ class AnthropicProvider(
     block_index_to_tool_call_id_map: dict[int, str] = {}
 
     def is_extended_thinking_model(self, model: str) -> bool:
-        return any(
-            model.startswith(prefix)
-            for prefix in self.EXTENDED_THINKING_MODEL_PREFIXES
+        # Optimized: tuple-styled 'startswith' for all prefixes at once
+        return model.startswith(
+            self.EXTENDED_THINKING_MODEL_PREFIXES
+            if isinstance(self.EXTENDED_THINKING_MODEL_PREFIXES, tuple)
+            else tuple(self.EXTENDED_THINKING_MODEL_PREFIXES)
         )
 
     def get_temperature(self) -> float:
@@ -762,8 +764,18 @@ class AnthropicProvider(
     ) -> AnthropicStream[RawMessageStreamEvent]:
         client = self.get_client(self.config)
         tools = self.config.tools
+
+        # Optimization: Compute once and re-use in create_params and below
+        self_model = self.model
+        is_extended_model = self.is_extended_thinking_model(self_model)
+        temperature = (
+            self.DEFAULT_EXTENDED_THINKING_TEMPERATURE
+            if is_extended_model
+            else self.DEFAULT_TEMPERATURE
+        )
+
         create_params = {
-            "model": self.model,
+            "model": self_model,
             "max_tokens": max_tokens,
             "messages": cast(
                 Any,
@@ -771,12 +783,12 @@ class AnthropicProvider(
             ),
             "system": system_prompt,
             "stream": True,
-            "temperature": self.get_temperature(),
+            "temperature": temperature,
         }
         if tools:
             all_tools = tools + additional_tools
             create_params["tools"] = convert_to_anthropic_tools(all_tools)
-        if self.is_extended_thinking_model(self.model):
+        if is_extended_model:
             create_params["thinking"] = {
                 "type": "enabled",
                 "budget_tokens": self.DEFAULT_EXTENDED_THINKING_BUDGET_TOKENS,

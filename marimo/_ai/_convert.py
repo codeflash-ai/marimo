@@ -5,6 +5,7 @@ import base64
 import dataclasses
 import json
 import uuid
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 from marimo import _loggers
@@ -214,11 +215,13 @@ def convert_to_anthropic_messages(
             continue
 
         current_parts: list[AnthropicParts] = []
-        data_reasoning_parts = [
+
+        # Use iterator for O(1) pops in data_reasoning_parts
+        data_reasoning_iter: Iterator[DataReasoningPart] = (
             part
             for part in message.parts
             if isinstance(part, DataReasoningPart)
-        ]
+        )
 
         for part in message.parts:
             if isinstance(part, TextPart):
@@ -229,15 +232,18 @@ def convert_to_anthropic_messages(
                 current_parts.append(text_part)
             elif isinstance(part, ReasoningPart):
                 signature = ""
-                if part.details and len(part.details) > 0:
-                    signature = part.details[0].signature or ""
+                details = part.details
+                if details and len(details) > 0:
+                    signature = details[0].signature or ""
 
                 # Use the first data reasoning part if there is no signature
-                # And remove it from the list
-                # We can optimize this
-                if not signature and data_reasoning_parts:
-                    signature = data_reasoning_parts[0].data.signature
-                    data_reasoning_parts.pop(0)
+                if not signature:
+                    # Use next(), no need to pop(0) from a list
+                    try:
+                        drp = next(data_reasoning_iter)
+                        signature = drp.data.signature
+                    except StopIteration:
+                        pass
 
                 thinking_message: ThinkingBlockParam = {
                     "type": "thinking",
