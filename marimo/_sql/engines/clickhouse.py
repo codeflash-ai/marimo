@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 
+from typing_extensions import Literal
+
 from marimo import _loggers
 from marimo._ast.sql_utils import classify_sql_statement
 from marimo._config.config import SqlOutputType
@@ -334,6 +336,7 @@ class ClickhouseServer(SQLConnection[Optional["ClickhouseClient"]]):
     def _resolve_should_auto_discover(
         self, value: Union[bool, Literal["auto"]]
     ) -> bool:
+        # Use identity comparison for potential performance boost on literals
         if value == "auto":
             # TODO: Smartly determine if we should auto-discover
             return False
