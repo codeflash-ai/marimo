@@ -143,9 +143,9 @@ class TransformsContainer(Generic[T]):
         if len(self._transforms) > len(transforms.transforms):
             return False
 
-        for i, transform in enumerate(self._transforms):
-            if transform != transforms.transforms[i]:
-                return False
+        # Optimize superset check using slicing and bulk comparison
+        if self._transforms != transforms.transforms[: len(self._transforms)]:
+            return False
 
         return True
 
