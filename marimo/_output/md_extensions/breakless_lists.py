@@ -32,25 +32,24 @@ class BreaklessListsPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
             return lines
 
         result_lines: list[str] = []
+        match = self.LIST_START_PATTERN.match
+        append = result_lines.append
+        lines_len = len(lines)
         i = 0
 
-        while i < len(lines):
+        while i < lines_len:
             current_line = lines[i]
-            result_lines.append(current_line)
+            append(current_line)
 
             # Check if we need to look ahead for a list
-            if i + 1 < len(lines):
+            if i + 1 < lines_len:
                 next_line = lines[i + 1]
+                current_line_stripped = current_line.strip()
 
                 # If current line is not empty and next line starts a list
-                if (
-                    current_line.strip()  # Current line has content
-                    and self.LIST_START_PATTERN.match(next_line)
-                ):  # Next line starts a list
-                    # Check if there's already a blank line
-                    if current_line.strip():
-                        # Insert blank line to enable list interruption
-                        result_lines.append("")
+                if current_line_stripped and match(next_line):
+                    # Insert blank line to enable list interruption
+                    append("")
 
             i += 1
 
