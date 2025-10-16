@@ -97,7 +97,11 @@ def _should_show_terms(last_accepted_at: Optional[str]) -> bool:
     """
     if not last_accepted_at:
         return True
-    last_accepted_date = datetime.datetime.strptime(
-        last_accepted_at, "%Y-%m-%d"
-    )
-    return last_accepted_date < TERMS_LAST_UPDATED
+    try:
+        last_accepted_date = datetime.date.fromisoformat(last_accepted_at)
+        return last_accepted_date < TERMS_LAST_UPDATED.date()
+    except ValueError:
+        last_accepted_date = datetime.datetime.strptime(
+            last_accepted_at, "%Y-%m-%d"
+        )
+        return last_accepted_date < TERMS_LAST_UPDATED
