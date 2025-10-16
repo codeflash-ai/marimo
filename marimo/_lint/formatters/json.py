@@ -90,18 +90,24 @@ class JSONFormatter(DiagnosticFormatter):
             "filename": filename,
             "line": lines[0] if lines else 0,
             "column": columns[0] if columns else 0,
-            "lines": list(lines) if len(lines) > 1 else None,
-            "columns": list(columns) if len(columns) > 1 else None,
-            "severity": diagnostic.severity.value
-            if diagnostic.severity
-            else None,
-            "name": diagnostic.name,
-            "code": diagnostic.code,
-            "fixable": diagnostic.fixable,
-            "fix": diagnostic.fix,
-            "cell_id": diagnostic.cell_id,
         }
 
-        # Filter out None values and return as typed dict
-        filtered = {k: v for k, v in result.items() if v is not None}
-        return DiagnosticJSON(filtered)  # type: ignore
+        # Add optional fields only if not None
+        if len(lines) > 1:
+            result["lines"] = list(lines)
+        if len(columns) > 1:
+            result["columns"] = list(columns)
+        if diagnostic.severity is not None:
+            result["severity"] = diagnostic.severity.value
+        if diagnostic.name is not None:
+            result["name"] = diagnostic.name
+        if diagnostic.code is not None:
+            result["code"] = diagnostic.code
+        if diagnostic.fixable is not None:
+            result["fixable"] = diagnostic.fixable
+        if diagnostic.fix is not None:
+            result["fix"] = diagnostic.fix
+        if diagnostic.cell_id is not None:
+            result["cell_id"] = diagnostic.cell_id
+
+        return DiagnosticJSON(result)  # type: ignore
