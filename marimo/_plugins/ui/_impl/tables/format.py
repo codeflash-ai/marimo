@@ -14,10 +14,7 @@ FormatMapping = dict[str, Union[str, Callable[..., JSONType]]]
 def format_value(
     col: str, value: JSONType, format_mapping: FormatMapping
 ) -> JSONType:
-    if format_mapping is None:
-        return value
-
-    if col not in format_mapping:
+    if not format_mapping or col not in format_mapping:
         return value
 
     formatter = format_mapping[col]
@@ -31,12 +28,12 @@ def format_value(
     try:
         if isinstance(formatter, str):
             # Handle numeric formatting specially to preserve signs and separators
-            if isinstance(value, (int, float)):
-                # Keep integers as integers for 'd' format specifier
-                if isinstance(value, int) and "d" in formatter:
+            if isinstance(value, int):
+                if "d" in formatter:
                     return formatter.format(value)
-                # Convert to float for float formatting
                 return formatter.format(float(value))
+            elif isinstance(value, float):
+                return formatter.format(value)
             return formatter.format(value)
         if callable(formatter):
             return formatter(value)
