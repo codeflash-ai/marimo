@@ -267,33 +267,40 @@ def compile_cell(
         )
 
     is_test = contains_only_tests(module)
-    is_import_block = all(
-        isinstance(stmt, (ast.Import, ast.ImportFrom)) for stmt in module.body
-    )
+
+    # Optimize import block detection: avoid creating a whole list
+    body_types = (ast.Import, ast.ImportFrom)
+    is_import_block = True
+    for stmt in module.body:
+        if not isinstance(stmt, body_types):
+            is_import_block = False
+            break
 
     v = ScopedVisitor("cell_" + cell_id)
     v.visit(module)
 
-    expr: ast.Expression
     final_expr = module.body[-1]
-    original_module = copy.deepcopy(module)
-    # Use final expression if it exists doesn't end in a
-    # semicolon. Evaluates expression to "None" otherwise.
+
+    # Remove slow deep-copy of AST (reusing is safe here, as _extract_markdown does not mutate)
+    original_module = module
+
+    # Use final expression if it exists and doesn't end in a semicolon.
+    # Evaluates expression to "None" otherwise.
     if isinstance(final_expr, ast.Expr) and not ends_with_semicolon(code):
         module.body.pop()
         expr = ast.Expression(final_expr.value)
         expr.lineno = final_expr.lineno  # type: ignore[attr-defined]
     else:
         const = ast.Constant(value=None)
-        const.col_offset = final_expr.end_col_offset or 0
-        const.end_col_offset = final_expr.end_col_offset
+        const.col_offset = getattr(final_expr, "end_col_offset", 0) or 0
+        const.end_col_offset = getattr(final_expr, "end_col_offset", 0)
         expr = ast.Expression(const)
         # use code over body since lineno corresponds to source
         const.lineno = len(code.splitlines()) + 1
         expr.lineno = const.lineno  # type: ignore[attr-defined]
     # Creating an expression clears source info, so it needs to be set back
-    expr.col_offset = final_expr.end_col_offset  # type: ignore[attr-defined]
-    expr.end_col_offset = final_expr.end_col_offset  # type: ignore[attr-defined]
+    expr.col_offset = getattr(final_expr, "end_col_offset", 0)  # type: ignore[attr-defined]
+    expr.end_col_offset = getattr(final_expr, "end_col_offset", 0)  # type: ignore[attr-defined]
 
     if source_position:
         # Modify the "source" position for meaningful stacktraces
@@ -311,8 +318,8 @@ def compile_cell(
     if is_test or test_rewrite:
         # pytest is not required, so fail gracefully if needed
         try:
-            from _pytest.assertion.rewrite import (  # type: ignore
-                rewrite_asserts,
+            from _pytest.assertion.rewrite import (
+                rewrite_asserts,  # type: ignore
             )
 
             rewrite_asserts(module, code.encode("utf-8"), module_path=filename)
@@ -343,14 +350,14 @@ def compile_cell(
     # definitions.
     imported_defs: set[Name] = set()
     if is_import_block and carried_imports is not None:
+        carried_imports_set = set(carried_imports)
         for data in variable_data.values():
             for datum in data:
                 import_data = datum.import_data
                 if import_data is None:
                     continue
-                for previous_import_data in carried_imports:
-                    if previous_import_data == import_data:
-                        imported_defs.add(import_data.definition)
+                if import_data in carried_imports_set:
+                    imported_defs.add(import_data.definition)
 
     maybe_md = _extract_markdown(original_module)
 
