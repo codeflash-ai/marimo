@@ -353,15 +353,18 @@ def get_marimo_processes() -> list[psutil.Process]:
     import psutil
 
     def is_marimo_process(proc: psutil.Process) -> bool:
-        if proc.name() == "marimo":
+        try:
+            name = proc.name()
+        except (psutil.AccessDenied, psutil.ZombieProcess):
+            return False
+
+        if name == "marimo":
             return True
 
-        if proc.name().lower() == "python":
+        if name.lower() == "python":
             try:
                 cmds = proc.cmdline()
-            except psutil.AccessDenied:
-                return False
-            except psutil.ZombieProcess:
+            except (psutil.AccessDenied, psutil.ZombieProcess):
                 return False
             # any endswith marimo
             has_marimo = any(x.endswith("marimo") for x in cmds)
@@ -373,13 +376,7 @@ def get_marimo_processes() -> list[psutil.Process]:
 
         return False
 
-    result: list[psutil.Process] = []
-
-    for proc in psutil.process_iter():
-        if is_marimo_process(proc):
-            result.append(proc)
-
-    return result
+    return [proc for proc in psutil.process_iter() if is_marimo_process(proc)]
 
 
 @ps.command(help="List the marimo processes", name="list")
