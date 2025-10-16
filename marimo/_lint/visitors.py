@@ -41,14 +41,21 @@ class VariableLineVisitor(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Visit ImportFrom nodes to find imported variable definitions."""
+        # Avoid unnecessary attr lookups by caching
+        target_variable = self.target_variable
         for alias in node.names:
-            if (
-                alias.asname == self.target_variable
-                or alias.name == self.target_variable
-            ):
+            # Fast-path: most common branches first
+            asname = alias.asname
+            if asname is not None:
+                if asname == target_variable:
+                    self.line_number = node.lineno
+                    self.column_number = node.col_offset + 1
+                    return
+            elif alias.name == target_variable:
                 self.line_number = node.lineno
                 self.column_number = node.col_offset + 1
                 return
+        # Only call generic_visit if no match found (avoid in hot path)
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
