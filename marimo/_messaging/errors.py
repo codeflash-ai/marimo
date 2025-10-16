@@ -137,14 +137,11 @@ def is_unexpected_error(error: Error) -> bool:
     These errors are unexpected, in that they are not intentional.
     mo.stop and interrupt are intentional.
     """
-    return not isinstance(
-        error,
-        (
-            MarimoAncestorPreventedError,
-            MarimoAncestorStoppedError,
-            MarimoInterruptionError,
-        ),
-    )
+    return type(error) not in {
+        MarimoAncestorPreventedError,
+        MarimoAncestorStoppedError,
+        MarimoInterruptionError,
+    }
 
 
 def is_sensitive_error(error: Error) -> bool:
