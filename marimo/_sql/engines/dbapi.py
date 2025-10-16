@@ -170,16 +170,25 @@ class DBAPIEngine(QueryEngine[DBAPIConnection]):
             # Column info
             desc = getattr(cursor, "description", None)
             if desc:
+                # Pre-allocate list if length is known for efficiency
                 cols: list[dict[str, Optional[Any]]] = []
+                # Use direct tuple indexing; avoid repeated len(col) checks by
+                # only slicing up to 7, then padding with None if short
                 for col in desc:
                     # description tuple: (name, type_code, display_size, internal_size, precision, scale, null_ok)
-                    name = col[0]
-                    type_code = col[1] if len(col) > 1 else None
-                    display_size = col[2] if len(col) > 2 else None
-                    internal_size = col[3] if len(col) > 3 else None
-                    precision = col[4] if len(col) > 4 else None
-                    scale = col[5] if len(col) > 5 else None
-                    null_ok = col[6] if len(col) > 6 else None
+                    sliced = col[:7]
+                    # Pad sliced tuple to length 7 if short
+                    if len(sliced) < 7:
+                        sliced = sliced + (None,) * (7 - len(sliced))
+                    (
+                        name,
+                        type_code,
+                        display_size,
+                        internal_size,
+                        precision,
+                        scale,
+                        null_ok,
+                    ) = sliced
 
                     cols.append(
                         {
@@ -196,16 +205,20 @@ class DBAPIEngine(QueryEngine[DBAPIConnection]):
             else:
                 meta["columns"] = None
 
-            if hasattr(cursor, "rowcount"):
+            # Use try/except AttributeError for better speed than hasattr+getattr
+            try:
                 meta["rowcount"] = cursor.rowcount
+            except AttributeError:
+                pass
 
-            # lastrowid (optional in many drivers)
-            if hasattr(cursor, "lastrowid"):
+            try:
                 meta["lastrowid"] = cursor.lastrowid
+            except AttributeError:
+                pass
 
-            # SQL type guess
-            # rowcount == -1 usually means SELECT (or DDL), >=0 means DML or SELECT (after execute)
             rc = getattr(cursor, "rowcount", None)
+            # Optimize conditional with set lookup
+            # rowcount == -1 usually means SELECT (or DDL), >=0 means DML or SELECT (after execute)
             if rc is None:
                 sql_type = "Unknown"
             elif rc == -1:
