@@ -353,15 +353,15 @@ def transform_exclamation_mark(sources: list[str]) -> list[str]:
     Handle exclamation mark commands.
     """
 
-    def transform(cell: str) -> str:
-        if "!pip" in cell:
-            cell = cell.replace(
-                "!pip",
-                "# (use marimo's built-in package management features instead) !pip",  # noqa: E501
-            )
-        return cell
-
-    return [transform(cell) for cell in sources]
+    return [
+        cell.replace(
+            "!pip",
+            "# (use marimo's built-in package management features instead) !pip",  # noqa: E501
+        )
+        if "!pip" in cell
+        else cell
+        for cell in sources
+    ]
 
 
 class Renamer:
