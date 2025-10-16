@@ -45,11 +45,8 @@ class MarimoPath:
 
     @staticmethod
     def is_valid_path(path: Union[str, Path]) -> bool:
-        try:
-            MarimoPath(path)
-            return True
-        except ValueError:
-            return False
+        # Fast check for .py or .md file extensions instead of full object creation
+        return Path(path).suffix in {".py", ".md"}
 
     def is_valid(self) -> bool:
         return self.is_python() or self.is_markdown()
