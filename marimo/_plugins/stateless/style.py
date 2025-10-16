@@ -33,16 +33,19 @@ def style(
         Html: An HTML object representing the item wrapped in a div
                 with the specified styles.
     """
-    # Initialize combined_style with style dict if provided,
-    # otherwise empty dict
-    combined_style = style or {}
+    # Avoid mutating the input style dict; use a copy if provided
+    combined_style = dict(style) if style is not None else {}
 
-    # Add kwargs to combined_style, converting snake_case to kebab-case
-    for key, value in kwargs.items():
-        kebab_key = key.replace("_", "-")
-        combined_style[kebab_key] = value
+    # Prepare converted kwargs keys, use update for O(N)
+    if kwargs:
+        converted_kwargs = {k.replace("_", "-"): v for k, v in kwargs.items()}
+        combined_style.update(converted_kwargs)
 
-    style_str = ";".join(
-        [f"{key}:{value}" for key, value in combined_style.items()]
-    )
-    return Html(h.div(children=as_dom_node(item).text, style=style_str))
+    # Fast path: avoid style string building for empty dict
+    if combined_style:
+        style_str = ";".join(
+            f"{key}:{value}" for key, value in combined_style.items()
+        )
+        return Html(h.div(children=as_dom_node(item).text, style=style_str))
+    else:
+        return Html(h.div(children=as_dom_node(item).text))

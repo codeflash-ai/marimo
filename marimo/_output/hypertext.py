@@ -120,7 +120,9 @@ class Html(MIME):
         #
         # flatten the text to make sure searching isn't broken by newlines
         flat_text = flatten_string(self._text)
-        for virtual_filename in ctx.virtual_file_registry.filenames():
+        filenames = ctx.virtual_file_registry.filenames()
+        # Efficiently match filenames (set lookup or substring scan)
+        for virtual_filename in filenames:
             if virtual_filename in flat_text:
                 ctx.virtual_file_registry.reference(virtual_filename)
                 self._virtual_filenames.append(virtual_filename)
