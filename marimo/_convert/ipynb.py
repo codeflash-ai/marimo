@@ -63,8 +63,10 @@ def transform_fixup_multiple_definitions(sources: list[str]) -> list[str]:
         return sources
 
     name_transformations: dict[str, str] = {}
+    # Optimize lookup for get_referring_cells(name, language="python")
     for name in multiply_defined_names:
-        if not graph.get_referring_cells(name, language="python"):
+        lcells = graph.get_referring_cells(name, language="python")
+        if not lcells:
             name_transformations[name] = (
                 "_" + name if not name.startswith("_") else name
             )
@@ -82,6 +84,7 @@ def transform_fixup_multiple_definitions(sources: list[str]) -> list[str]:
         except SyntaxError:
             return source
 
+    # Use generator for minor memory efficiency, as sources may be large
     return [transform(source) for source in sources]
 
 

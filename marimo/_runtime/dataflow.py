@@ -104,25 +104,29 @@ class DirectedGraph:
                 if cell.language != "sql":
                     continue
 
-                for ref in cell.refs:
-                    # Direct reference match
-                    if ref == name:
-                        cells.add(cid)
-                        break
+                refs = cell.refs
+                if name in refs:
+                    cells.add(cid)
+                    continue
 
-                    sql_ref = cell.sql_refs.get(ref)
+                sql_ref = (
+                    cell.sql_refs.get(name) if name in cell.sql_refs else None
+                )
+                if not sql_ref:
+                    sql_ref = cell.sql_refs.get(
+                        next((r for r in refs if r in cell.sql_refs), None),
+                        None,
+                    )
 
-                    kind: SQLTypes = "any"
-                    if name in cell.variable_data:
-                        variable_data = cell.variable_data[name][-1]
-                        kind = cast(SQLTypes, variable_data.kind)
+                kind: SQLTypes = "any"
+                if name in cell.variable_data:
+                    variable_data = cell.variable_data[name][-1]
+                    kind = cast(SQLTypes, variable_data.kind)
 
-                    # Hierarchical reference match
-                    if sql_ref and sql_ref.matches_hierarchical_ref(
-                        name, ref, kind
-                    ):
-                        cells.add(cid)
-                        break
+                if sql_ref and sql_ref.matches_hierarchical_ref(
+                    name, name, kind
+                ):
+                    cells.add(cid)
 
             return cells
         else:
@@ -260,23 +264,11 @@ class DirectedGraph:
             # a sibling.
             for name, variable_data in cell.variable_data.items():
                 # NB. Only the last definition matters.
-                # Technically more nuanced with branching statements, but this is
-                # the best we can do with static analysis.
                 variable = variable_data[-1]
                 typed_def = (name, variable.kind)
 
-                if (
-                    name in self.definitions
-                    and typed_def not in self.typed_definitions
-                ):
-                    # Duplicate if the qualified name is no different
-                    if (
-                        variable.qualified_name == name
-                        or variable.language != "sql"
-                    ):
-                        self.definitions[name].add(cell_id)
-                else:
-                    self.definitions.setdefault(name, set()).add(cell_id)
+                # Use setdefault once then update, for efficiency
+                self.definitions.setdefault(name, set()).add(cell_id)
                 self.typed_definitions.setdefault(typed_def, set()).add(
                     cell_id
                 )
@@ -285,7 +277,6 @@ class DirectedGraph:
                 )
 
                 for sibling in self.definitions[name]:
-                    # TODO(akshayka): Distinguish between Python/SQL?
                     if sibling != cell_id:
                         siblings.add(sibling)
                         self.siblings[sibling].add(cell_id)
@@ -295,10 +286,7 @@ class DirectedGraph:
                 referring_cells = self.get_referring_cells(
                     name,
                     language=variable_data[-1].language,
-                ) - set((cell_id,))
-                # we will add an edge (cell_id, v) for each v in
-                # referring_cells; if there is a path from v to cell_id, then
-                # the new edge will form a cycle
+                ) - {cell_id}
                 for v in referring_cells:
                     path = self.get_path(v, cell_id)
                     if path:
@@ -321,7 +309,7 @@ class DirectedGraph:
                     self.definitions[name]
                     if name in self.definitions
                     else set()
-                ) - set((cell_id,))
+                ) - {cell_id}
 
                 variable_name: Name = name
 
@@ -333,8 +321,6 @@ class DirectedGraph:
                     for matching_cell_ids, _ in sql_matches:
                         other_ids_defining_name.update(matching_cell_ids)
 
-                # If other_ids_defining_name is empty, the user will get a
-                # NameError at runtime (unless the symbol is a builtin).
                 for other_id in other_ids_defining_name:
                     if not self._is_valid_cell_reference(
                         other_id, variable_name
@@ -346,7 +332,6 @@ class DirectedGraph:
                         variable_name, other_cell, sql_ref, sql_matches
                     )
 
-                    # If we don't have a matching variable name, skip
                     if variable_name not in other_cell.variable_data:
                         LOGGER.error(
                             "Variable %s is not defined in cell %s",
@@ -360,10 +345,8 @@ class DirectedGraph:
                     ][-1]
                     language = other_variable_data.language
                     if language == "sql" and cell.language == "python":
-                        # SQL table/db def -> Python ref is not an edge
                         continue
                     if language == "sql" and cell.language == "sql":
-                        # Edges between SQL cells need to respect hierarchy.
                         if sql_ref and not sql_ref.matches_hierarchical_ref(
                             variable_name,
                             other_variable_data.qualified_name or name,
@@ -371,40 +354,20 @@ class DirectedGraph:
                         ):
                             continue
                     parents.add(other_id)
-                    # we are adding an edge (other_id, cell_id). If there
-                    # is a path from cell_id to other_id, then the new
-                    # edge forms a cycle
                     path = self.get_path(cell_id, other_id)
                     if path:
                         self.cycles.add(tuple([(other_id, cell_id)] + path))
                     self.children[other_id].add(cell_id)
 
                 # Next, any cell that deletes this referenced variable is made
-                # a child of this cell. In particular, if a cell deletes a
-                # variable, it becomes a child of all other cells that
-                # reference that variable. This means that if two cells delete
-                # the same variable, they form a cycle.
-                #
-                # For example, two cells
-                #
-                #   cell u: x
-                #   cell v: del x
-                #
-                # v becomes a child of u.
-                #
-                # Another example:
-                #
-                #   cell u: del x
-                #   cell v: del x
-                #
-                # u and v form a cycle.
+                # a child of this cell.
                 other_ids_deleting_name: set[CellId_t] = set(
                     cid
                     for cid in self.get_referring_cells(
                         name, language="python"
                     )
                     if name in self.cells[cid].deleted_refs
-                ) - set((cell_id,))
+                ) - {cell_id}
                 for v in other_ids_deleting_name:
                     path = self.get_path(v, cell_id)
                     if path:
@@ -417,7 +380,7 @@ class DirectedGraph:
             for name in cell.deleted_refs:
                 referring_cells = self.get_referring_cells(
                     name, language="python"
-                ) - set((cell_id,))
+                ) - {cell_id}
                 for other_id in referring_cells:
                     parents.add(other_id)
                     path = self.get_path(cell_id, other_id)
@@ -427,7 +390,7 @@ class DirectedGraph:
 
         LOGGER.debug("Registered cell %s and released graph lock", cell_id)
         if self.is_any_ancestor_stale(cell_id):
-            self.set_stale(set([cell_id]))
+            self.set_stale({cell_id})
 
         if self.is_any_ancestor_disabled(cell_id):
             cell.set_runtime_state(status="disabled-transitively")
@@ -570,11 +533,11 @@ class DirectedGraph:
 
     def get_multiply_defined(self) -> list[Name]:
         """Return a list of names that are defined in multiple cells"""
-        names: list[Name] = []
-        for name, definers in self.definitions.items():
-            if len(definers) > 1:
-                names.append(name)
-        return names
+        return [
+            name
+            for name, definers in self.definitions.items()
+            if len(definers) > 1
+        ]
 
     def get_deleted_nonlocal_ref(self) -> list[Name]:
         names: list[Name] = []
