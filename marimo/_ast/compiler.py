@@ -231,18 +231,14 @@ def compile_cell(
 
     # Replace non-breaking spaces with regular spaces -- some frontends
     # send nbsp in place of space, which is a syntax error.
-    #
-    # See https://github.com/pyodide/pyodide/issues/3337,
-    #     https://github.com/marimo-team/marimo/issues/1546
     code = code.replace("\u00a0", " ")
-    # Overloads on compile are strange, cast for proper typing.
+    split_lines = code.splitlines()
     module = cast(
         ast.Module,
         ast_compile(
             code,
             "<unknown>",
             mode="exec",
-            # don't inherit compiler flags, in particular future annotations
             dont_inherit=True,
             flags=ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,
         ),
@@ -267,6 +263,7 @@ def compile_cell(
         )
 
     is_test = contains_only_tests(module)
+    # All statements are imports?
     is_import_block = all(
         isinstance(stmt, (ast.Import, ast.ImportFrom)) for stmt in module.body
     )
@@ -274,26 +271,25 @@ def compile_cell(
     v = ScopedVisitor("cell_" + cell_id)
     v.visit(module)
 
-    expr: ast.Expression
     final_expr = module.body[-1]
-    original_module = copy.deepcopy(module)
-    # Use final expression if it exists doesn't end in a
-    # semicolon. Evaluates expression to "None" otherwise.
+    # Only mutate module if we need to modify last expression!
+    expr: ast.Expression
+    end_col_offset = getattr(final_expr, "end_col_offset", 0)
     if isinstance(final_expr, ast.Expr) and not ends_with_semicolon(code):
         module.body.pop()
         expr = ast.Expression(final_expr.value)
-        expr.lineno = final_expr.lineno  # type: ignore[attr-defined]
+        expr.lineno = getattr(final_expr, "lineno", None)
     else:
         const = ast.Constant(value=None)
-        const.col_offset = final_expr.end_col_offset or 0
-        const.end_col_offset = final_expr.end_col_offset
+        # Pull end_col_offset from last expr for alignment
+        const.col_offset = end_col_offset or 0
+        const.end_col_offset = end_col_offset
         expr = ast.Expression(const)
         # use code over body since lineno corresponds to source
-        const.lineno = len(code.splitlines()) + 1
-        expr.lineno = const.lineno  # type: ignore[attr-defined]
-    # Creating an expression clears source info, so it needs to be set back
-    expr.col_offset = final_expr.end_col_offset  # type: ignore[attr-defined]
-    expr.end_col_offset = final_expr.end_col_offset  # type: ignore[attr-defined]
+        const.lineno = len(split_lines) + 1
+        expr.lineno = const.lineno
+    expr.col_offset = end_col_offset
+    expr.end_col_offset = end_col_offset
 
     if source_position:
         # Modify the "source" position for meaningful stacktraces
@@ -303,20 +299,16 @@ def compile_cell(
     else:
         # store the cell's code in Python's linecache so debuggers can find it
         filename = get_filename(cell_id)
-        # cache the entire cell's code, doesn't need to be done in source case
-        # since there is an actual file to read from.
         cache(filename, code)
 
     # pytest assertion rewriting, gives more context for assertion failures.
     if is_test or test_rewrite:
-        # pytest is not required, so fail gracefully if needed
         try:
-            from _pytest.assertion.rewrite import (  # type: ignore
-                rewrite_asserts,
+            from _pytest.assertion.rewrite import (
+                rewrite_asserts,  # type: ignore
             )
 
             rewrite_asserts(module, code.encode("utf-8"), module_path=filename)
-        # general catch-all, in case of internal pytest API changes
         except Exception:
             LOGGER.warning(
                 "pytest is not installed, skipping assertion rewriting"
@@ -338,9 +330,6 @@ def compile_cell(
         if name in v.variable_data
     }
 
-    # If this cell is an import cell, we carry over any imports in
-    # `carried_imports` that are also in this cell to the import workspace's
-    # definitions.
     imported_defs: set[Name] = set()
     if is_import_block and carried_imports is not None:
         for data in variable_data.values():
@@ -352,13 +341,14 @@ def compile_cell(
                     if previous_import_data == import_data:
                         imported_defs.add(import_data.definition)
 
-    maybe_md = _extract_markdown(original_module)
+    # Avoid deepcopy: pass module directly to _extract_markdown,
+    # since all code using original_module only *reads* from it.
+    maybe_md = _extract_markdown(module)
 
     return CellImpl(
-        # keyed by original (user) code, for cache lookups
         key=code_key(code),
         code=code,
-        mod=original_module,
+        mod=module,
         defs=nonlocals,
         refs=v.refs,
         sql_refs=v.sql_refs,
