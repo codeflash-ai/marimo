@@ -161,14 +161,13 @@ class DefaultTableManager(TableManager[JsonTableData]):
         ):
             for row_id, column_name in cells:
                 column = self.data[column_name]
-                if isinstance(column, Sequence):
-                    selected_cells.append(
-                        TableCell(
-                            row=row_id,
-                            column=column_name,
-                            value=column[int(row_id)],
-                        )
+                selected_cells.append(
+                    TableCell(
+                        row=row_id,
+                        column=column_name,
+                        value=column[int(row_id)],
                     )
+                )
         elif isinstance(self.data, dict):
             rows_of_dict = list(self.data.items())
             for row_id, column_name in cells:
@@ -182,24 +181,25 @@ class DefaultTableManager(TableManager[JsonTableData]):
                 )
         elif isinstance(self.data, list):
             rows_of_list = self.data
+            rows_len = len(rows_of_list)
             for row_id, column_name in cells:
                 row_index = int(row_id)
-                if row_index < 0 or row_index > len(rows_of_list) - 1:
-                    continue
-
-                row = rows_of_list[row_index]
-                if isinstance(row, dict) and column_name in row:
-                    selected_cells.append(
-                        TableCell(
-                            row=row_id,
-                            column=column_name,
-                            value=row[column_name],
+                if 0 <= row_index < rows_len:
+                    row = rows_of_list[row_index]
+                    if isinstance(row, dict) and column_name in row:
+                        selected_cells.append(
+                            TableCell(
+                                row=row_id,
+                                column=column_name,
+                                value=row[column_name],
+                            )
                         )
-                    )
-                elif not isinstance(row, list) and column_name == "value":
-                    selected_cells.append(
-                        TableCell(row=row_id, column=column_name, value=row)
-                    )
+                    elif not isinstance(row, list) and column_name == "value":
+                        selected_cells.append(
+                            TableCell(
+                                row=row_id, column=column_name, value=row
+                            )
+                        )
 
         return selected_cells
 
