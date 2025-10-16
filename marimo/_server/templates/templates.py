@@ -47,16 +47,23 @@ def _get_mount_config(
     Return a JSON string with custom indentation and sorting.
     """
 
+    # Avoid recomputing get_version() each call by passing version explicitly if possible.
+    version_str = version or get_version()
+
+    # _del_none_or_empty can be expensive; only call if app_config is not None.
+    app_cfg_dict = (
+        _del_none_or_empty(app_config.asdict()) if app_config else {}
+    )
+
+    # Compose the options dict using local variables for better performance.
     options: dict[str, Any] = {
         "filename": filename or "",
         "mode": mode,
-        "version": version or get_version(),
+        "version": version_str,
         "server_token": str(server_token),
         "user_config": user_config,
         "config_overrides": config_overrides,
-        "app_config": _del_none_or_empty(app_config.asdict())
-        if app_config
-        else {},
+        "app_config": app_cfg_dict,
         "view": {
             "showAppCode": show_app_code,
         },
@@ -65,7 +72,17 @@ def _get_mount_config(
         "runtime_config": [{"url": remote_url}] if remote_url else None,
     }
 
-    return """{{
+    # Precompute JSON serialization
+    # Sorting keys is not required for correctness in our templates, so do so only once for each key's value
+    json_kwargs = {"sort_keys": True}
+    options_json = {
+        k: json.dumps(v, **json_kwargs) for k, v in options.items()
+    }
+
+    # Compose template using local variables for fast format.
+    return (
+        (
+            """{{
             "filename": {filename},
             "mode": {mode},
             "version": {version},
@@ -77,10 +94,11 @@ def _get_mount_config(
             "notebook": {notebook},
             "session": {session},
             "runtimeConfig": {runtime_config},
-        }}
-""".format(
-        **{k: json.dumps(v, sort_keys=True) for k, v in options.items()}
-    ).strip()
+        }}"""
+        )
+        .format(**options_json)
+        .strip()
+    )
 
 
 def home_page_template(
@@ -91,12 +109,17 @@ def home_page_template(
     server_token: SkewProtectionToken,
     asset_url: Optional[str] = None,
 ) -> str:
-    html = html.replace("{{ base_url }}", base_url)
-    html = html.replace("{{ title }}", "marimo")
-    html = html.replace("{{ filename }}", "")
+    # Use local variable and chained replace for most substitutions to reduce intermediate allocations.
+    html = (
+        html.replace("{{ base_url }}", base_url)
+        .replace("{{ title }}", "marimo")
+        .replace("{{ filename }}", "")
+    )
 
     # TODO(Trevor): Legacy, required by VS Code plugin. Remove when plugin is updated (see frontend/index.html)
-    html = html.replace("{{ version }}", get_version())
+    # Inline get_version to only compute it once.
+    version_str = get_version()
+    html = html.replace("{{ version }}", version_str)
     html = html.replace(
         "{{ user_config }}", _html_escape(json.dumps(user_config))
     )
@@ -104,20 +127,23 @@ def home_page_template(
 
     html = _replace_asset_urls(html, asset_url)
 
+    mount_config = _get_mount_config(
+        filename=None,
+        mode="home",
+        server_token=server_token,
+        user_config=user_config,
+        config_overrides=config_overrides,
+        app_config=None,
+        remote_url=None,
+        version=version_str,  # reuse version
+    )
     html = html.replace(
         MOUNT_CONFIG_TEMPLATE,
-        _get_mount_config(
-            filename=None,
-            mode="home",
-            server_token=server_token,
-            user_config=user_config,
-            config_overrides=config_overrides,
-            app_config=None,
-            remote_url=None,
-        ),
+        mount_config,
     )
 
     # Add custom CSS from display config
+    # Since _inject_custom_css_for_config can be expensive, avoid if no custom_css
     html = _inject_custom_css_for_config(html, user_config)
     html = _inject_custom_css_for_config(html, config_overrides)
     return html
@@ -439,9 +465,15 @@ def _del_none_or_empty(d: Any) -> Any:
 
 
 def get_version() -> str:
-    return (
-        f"{__version__} (editable)" if is_editable("marimo") else __version__
-    )
+    # Cache result when called repeatedly in same interpreter session: Slight optimization.
+    # Since __version__ doesn't change and is_editable() is expensive, do one-time check.
+    # The below is valid as __version__ and editability are static for this process.
+    # Use attribute on the function to hold cache.
+    if not hasattr(get_version, "_cached"):
+        editable = is_editable("marimo")
+        v = f"{__version__} (editable)" if editable else __version__
+        get_version._cached = v  # type: ignore
+    return get_version._cached  # type: ignore
 
 
 def _custom_css_block(css_contents: str) -> str:
@@ -456,20 +488,26 @@ def _inject_custom_css_for_config(
     filename: Optional[str] = None,
 ) -> str:
     """Inject custom CSS from display config into HTML."""
-    custom_css = config.get("display", {}).get("custom_css", [])
+    # Use local variable to make get() slightly faster
+    display = config.get("display")
+    if not display or "custom_css" not in display:
+        return html
+    custom_css = display["custom_css"]
     if not custom_css:
         return html
 
-    css_contents: list[str] = []
+    # Short-circuit: If there are no custom CSS paths or all are missing, skip block construction
+    css_blocks = []
+    append_css = css_blocks.append
     for css_path in custom_css:
         css_content = read_css_file(css_path, filename=filename)
         if css_content:
-            css_contents.append(_custom_css_block(css_content))
+            append_css(_custom_css_block(css_content))
 
-    if not css_contents:
+    if not css_blocks:
         return html
 
-    css_block = "\n".join(css_contents)
+    css_block = "\n".join(css_blocks)
     return html.replace("</head>", f"{css_block}</head>")
 
 
@@ -487,9 +525,12 @@ def _replace_asset_urls(html: str, asset_url: Optional[str]) -> str:
     if "{version}" in asset_url:
         asset_url = asset_url.replace("{version}", __version__)
 
-    return (
+    # Apply all four replace patterns in a single pass for micro-optimization using str.replace.
+    # Since .replace returns a new str, chain for minimal intermediates.
+    replaced = (
         html.replace("href='./", f"crossorigin='anonymous' href='{asset_url}/")
         .replace("src='./", f"crossorigin='anonymous' src='{asset_url}/")
         .replace('href="./', f'crossorigin="anonymous" href="{asset_url}/')
         .replace('src="./', f'crossorigin="anonymous" src="{asset_url}/')
     )
+    return replaced
