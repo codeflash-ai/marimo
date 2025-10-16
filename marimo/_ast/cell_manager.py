@@ -489,8 +489,9 @@ class CellManager:
             Optional[CellId_t]: The ID of the first cell with matching code,
             or None if no match is found
         """
-        for cell_id, cell_data in self._cell_data.items():
-            if cell_data.code == code:
+        cell_data = self._cell_data
+        for cell_id in cell_data:
+            if cell_data[cell_id].code == code:
                 return cell_id
         return None
 
