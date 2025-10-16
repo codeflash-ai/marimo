@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, cast, final
 from marimo._messaging.mimetypes import KnownMimeType
 from marimo._output.mime import MIME
 from marimo._output.rich_help import mddoc
-from marimo._output.utils import flatten_string
+from marimo._runtime.context import ContextNotInitializedError, get_context
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -86,40 +86,25 @@ class Html(MIME):
         """
         self._text = text
         mimetype, data = self._mime_()
-
+        # Assign serialized_mime_bundle directly for performance.
         self._serialized_mime_bundle = {
             "mimetype": mimetype,
             "data": data,
         }
-        # Whenever _serialized_mime_bundle is set, ensure a public copy exists.
-        # This avoids declaring a public attribute (does not show up in docs)
-        # Pandas does not serialize private variables, so we need this.
-        self.__setattr__(
-            "serialized_mime_bundle", self._serialized_mime_bundle
-        )
+        # Ensure a public copy exists for serialization by dataframes, etc.
+        self.serialized_mime_bundle = self._serialized_mime_bundle
 
         # A list of the virtual file names referenced by this HTML element.
         self._virtual_filenames: list[str] = []
-
-        from marimo._runtime.context import (
-            ContextNotInitializedError,
-            get_context,
-        )
 
         try:
             ctx = get_context()
         except ContextNotInitializedError:
             return
 
-        # Virtual File Refcounting
-        #
-        # HTML elements are responsible for maintaining the reference counts
-        # of virtual files: virtual files cannot be disposed while HTML
-        # elements reference them. For example, a user might cache HTML
-        # referencing a virtual file if they create it using functools.cache.
-        #
-        # flatten the text to make sure searching isn't broken by newlines
-        flat_text = flatten_string(self._text)
+        # Fast flatten; do not store unnecessary variables.
+        flat_text = "".join(line.strip() for line in self._text.split("\n"))
+        # Use list/iteration directly for filenames as registry is expected to be small.
         for virtual_filename in ctx.virtual_file_registry.filenames():
             if virtual_filename in flat_text:
                 ctx.virtual_file_registry.reference(virtual_filename)

@@ -207,9 +207,7 @@ def hstack(
         align=align,
         wrap=wrap,
         gap=gap,
-        child_flexes=[1 for _ in range(len(items))]
-        if widths == "equal"
-        else widths,
+        child_flexes=[1] * len(items) if widths == "equal" else widths,
     )
 
 
