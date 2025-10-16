@@ -14,6 +14,8 @@ from __future__ import annotations
 import itertools
 from typing import Any, Callable, Union
 
+_LEAF_TYPES = (list, tuple, dict)
+
 STRUCT_TYPE = Union[tuple[Any, ...], list[Any], dict[Any, Any]]
 UNFLATTEN_TYPE = Callable[[list[Any]], Union[STRUCT_TYPE, Any]]
 FLATTEN_RET_TYPE = tuple[list[Any], UNFLATTEN_TYPE]
@@ -24,7 +26,7 @@ class CyclicStructureError(Exception):
 
 
 def _is_leaf(obj: Any) -> bool:
-    return not isinstance(obj, (list, tuple, dict))
+    return not isinstance(obj, _LEAF_TYPES)
 
 
 def _flatten_sequence(
