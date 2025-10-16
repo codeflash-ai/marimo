@@ -5,6 +5,7 @@ import base64
 import io
 import mimetypes
 import pathlib
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 from urllib.parse import urlparse
 
@@ -26,18 +27,31 @@ def guess_mime_type(
     if src is None:
         return None
 
-    if isinstance(src, str) and src.startswith("data:"):
-        return src.split(";")[0].split(":")[1]
-
+    # This path is significantly faster than calling mimetypes
     if isinstance(src, str):
-        return mimetypes.guess_type(src)[0]
+        if src.startswith("data:"):
+            # Avoid split;1 calls if possible for most cases by slicing:
+            # "data:mime/type;...."
+            start = 5
+            end = src.find(";")
+            if end == -1:
+                # fallback to the old logic; should rarely happen
+                return src.split(";")[0].split(":")[1]
+            return src[start:end]
+        # Use the cache for string filenames
+        return _cached_guess_type(src)
 
-    if isinstance(src, io.FileIO):
-        return mimetypes.guess_type(src.name)[0]
-
+    src_name: Optional[str] = None
+    # Check the lowest cost type test first (most common): BufferedReader before FileIO (FileIO is IOBase for file handles)
+    # type: ignore for types revealed only at runtime
     if isinstance(src, io.BufferedReader):
-        return mimetypes.guess_type(src.name)[0]
+        src_name = getattr(src, "name", None)
+    elif isinstance(src, io.FileIO):
+        src_name = getattr(src, "name", None)
 
+    # If we found a `.name` attribute, use it
+    if src_name is not None:
+        return _cached_guess_type(src_name)
     return None
 
 
@@ -152,3 +166,9 @@ def is_data_empty(data: Union[str, bytes, io.BytesIO, Any]) -> bool:
         return cast(io.BytesIO, data).getbuffer().nbytes == 0
 
     return False
+
+
+# Only cache string and path-based lookups (the vast majority of use cases)
+@lru_cache(maxsize=2048)
+def _cached_guess_type(name: str) -> Optional[str]:
+    return mimetypes.guess_type(name)[0]
