@@ -273,14 +273,14 @@ def _apply_edits_column_oriented(
     edits: DataEdits,
     schema: Optional[nw.Schema] = None,
 ) -> ColumnOrientedData:
+    # Inline edit type checks for speed (avoid function call overhead)
     for edit in edits["edits"]:
-        if is_positional_edit(edit):
+        if "rowIdx" in edit and "columnId" in edit and "value" in edit:
             _apply_positional_edit_column_oriented(data, edit, schema)
-        elif is_row_edit(edit):
+        elif "rowIdx" in edit and "type" in edit:
             _apply_row_edit_column_oriented(data, edit)
-        elif is_column_edit(edit):
+        elif "columnIdx" in edit and "type" in edit:
             _apply_column_edit_column_oriented(data, edit)
-
     return data
 
 
@@ -441,13 +441,15 @@ def _apply_positional_edit_column_oriented(
 ) -> None:
     """Apply a positional edit to column-oriented data."""
     column = data[edit["columnId"]]
-    if edit["rowIdx"] >= len(column):
+    rowidx = edit["rowIdx"]
+    col_len = len(column)
+    if rowidx >= col_len:
         # Extend the column with None values up to the new row index
-        column.extend([None] * (edit["rowIdx"] - len(column) + 1))
+        column.extend([None] * (rowidx - col_len + 1))
     dtype = schema.get(edit["columnId"]) if schema else None
-    column[edit["rowIdx"]] = _convert_value(
-        edit["value"], column[0] if column else None, dtype
-    )
+    orig_value = column[0] if col_len > 0 else None
+    # _convert_value must not be inlined due to ref
+    column[rowidx] = _convert_value(edit["value"], orig_value, dtype)
 
 
 def _apply_positional_edit_row_oriented(
@@ -473,11 +475,14 @@ def _apply_row_edit_column_oriented(
 ) -> None:
     """Apply a row edit to column-oriented data."""
     if edit["type"] == "remove":
-        rowIdx = edit["rowIdx"]
+        rowidx = edit["rowIdx"]
+        # Instead of looping over .values() and testing index for all columns,
+        # iterate only over columns where the index exists (all columns assumed same length)
+        # This is not safe if columns have different lengths, so preserve logic, but reduce function calls
         for column in data.values():
-            if not _is_valid_index(rowIdx, len(column)):
-                continue
-            del column[rowIdx]
+            # Inline _is_valid_index for perf
+            if 0 <= rowidx < len(column):
+                del column[rowidx]
 
 
 def _apply_row_edit_row_oriented(
@@ -515,55 +520,51 @@ def _apply_column_edit_column_oriented(
     edit: ColumnEdit,
 ) -> None:
     """Apply a column edit to column-oriented data."""
+    # Optimization: avoid repeatedly calling list(data.keys()). Instead, call once.
     column_order = list(data.keys())
     new_column_name = edit.get("newName")
-
     column_idx = edit["columnIdx"]
     edit_type = edit["type"]
 
     _validate_column_edit(edit, len(data), new_column_name)
 
-    column_idx = edit["columnIdx"]
-    edit_type = edit["type"]
-
     if edit_type == "insert":
         assert new_column_name is not None
-
+        # Avoid repeated computation of column lengths
         data_length = len(data[column_order[0]]) if column_order else 0
 
         if column_idx == len(column_order):
-            # Add new column at the end
+            # Add new column at the end; do not copy or clear dict
             data[new_column_name] = [None] * data_length
         else:
             # Insert new column at specific index
-            column_data = data.copy()
-            data.clear()
+            # Optimization: build new dict in an ordered loop directly, don't copy/clear
+            new_data = {}
             for idx, key in enumerate(column_order):
                 if idx == column_idx:
-                    data[new_column_name] = [None] * data_length
-                data[key] = column_data[key]
+                    new_data[new_column_name] = [None] * data_length
+                new_data[key] = data[key]
+            data.clear()
+            data.update(new_data)
         return
 
-    # Find column by index
-    column_id = None
-    for idx, key in enumerate(column_order):
-        if idx == column_idx:
-            column_id = key
-            break
-
-    if column_id is None:
+    # Get the column name at the given index efficiently
+    try:
+        column_id = column_order[column_idx]
+    except IndexError:
         raise ValueError(f"Column index {column_idx} not found")
 
     if edit_type == "rename":
         assert new_column_name is not None
-
-        column_data = data.copy()
-        data.clear()
+        # Optimization: build new dict in one pass, then update data all at once
+        new_data = {}
         for key in column_order:
             if key == column_id:
-                data[new_column_name] = column_data[key]
+                new_data[new_column_name] = data[key]
             else:
-                data[key] = column_data[key]
+                new_data[key] = data[key]
+        data.clear()
+        data.update(new_data)
     elif edit_type == "remove":
         del data[column_id]
 
