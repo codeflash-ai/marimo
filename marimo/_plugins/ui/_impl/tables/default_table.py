@@ -54,6 +54,12 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def __init__(self, data: JsonTableData):
         self.data = data
         self.is_column_oriented = _is_column_oriented(data)
+        # Optimize by precomputing first column for column-oriented data
+        if isinstance(data, dict) and self.is_column_oriented:
+            # This member is only used if is_column_oriented is True and self.data is dict
+            self._first_column = next(iter(data.values()), None)
+        else:
+            self._first_column = None
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -339,8 +345,8 @@ class DefaultTableManager(TableManager[JsonTableData]):
         del force
         if isinstance(self.data, dict):
             if self.is_column_oriented:
-                first = next(iter(self.data.values()), None)
-                return len(cast(list[Any], first))
+                # Use precomputed first column for efficiency
+                return len(cast(list[Any], self._first_column))
             else:
                 return len(self.data)
         return len(self.data)
