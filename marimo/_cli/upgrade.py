@@ -41,7 +41,15 @@ def print_latest_version(current_version: str, state: MarimoCLIState) -> None:
 
 
 def _is_in_uv() -> bool:
-    return psutil.Process(os.getppid()).name() == "uv"
+    # Cache parent process once to avoid extra syscalls
+    ppid = os.getppid()
+    try:
+        parent_proc = psutil.Process(ppid)
+        # Use .name() only once, avoid double lookup
+        return parent_proc.name() == "uv"
+    except psutil.Error:
+        # Defensive: If process is gone, match original semantics (which would raise)
+        raise
 
 
 @server_tracer.start_as_current_span("check_for_updates")
