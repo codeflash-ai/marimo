@@ -54,6 +54,14 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def __init__(self, data: JsonTableData):
         self.data = data
         self.is_column_oriented = _is_column_oriented(data)
+        # Cache column names if possible for dict data structures, since they are immutable for the table data's lifetime
+        self._column_names: list[str] | None = None
+        if isinstance(self.data, dict):
+            if not self.is_column_oriented:
+                self._column_names = [KEY, VALUE]
+            else:
+                # keys() returns a view; converting to tuple to avoid repeated conversion on .get_column_names()
+                self._column_names = list(self.data.keys())
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -349,12 +357,15 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return len(self.data) if isinstance(self.data, dict) else 1
 
     def get_column_names(self) -> list[str]:
-        if isinstance(self.data, dict):
-            if not self.is_column_oriented:
-                return [KEY, VALUE]
-            return list(self.data.keys())
+        if self._column_names is not None:
+            # Fast path for cached column names
+            return self._column_names
+        # For non-dict data, we have to infer on demand, as the underlying data may be mutable
         first = next(iter(self.data), None)
-        return list(first.keys()) if isinstance(first, dict) else ["value"]
+        if isinstance(first, dict):
+            # keys() returns a view; converting to list is necessary for compatibility
+            return list(first.keys())
+        return ["value"]
 
     def get_unique_column_values(self, column: str) -> list[str | int | float]:
         return sorted(
