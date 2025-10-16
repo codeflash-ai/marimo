@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from narwhals.dtypes import DType
     from typing_extensions import TypeIs
 
+_str_list_cache = {}
+
 
 @dataclass
 class DataEditorValue:
@@ -326,49 +328,36 @@ def _convert_value(
             return None
 
         if dtype is not None:
-            if dtype == nw.Datetime:
+            # Use a local variable rather than repeated global lookups
+            D = dtype
+            if D == nw.Datetime:
                 return datetime.datetime.fromisoformat(value)
-            elif dtype == nw.Date:
+            elif D == nw.Date:
                 return datetime.date.fromisoformat(value)
-            elif dtype == nw.Duration:
+            elif D == nw.Duration:
                 return datetime.timedelta(microseconds=float(value))
-            elif dtype == nw.Float32:
+            elif D == nw.Float32 or D == nw.Float64:
                 return float(value)
-            elif dtype == nw.Float64:
-                return float(value)
-            elif dtype == nw.Int16:
+            elif D in {
+                nw.Int16,
+                nw.Int32,
+                nw.Int64,
+                nw.UInt16,
+                nw.UInt32,
+                nw.UInt64,
+            }:
                 return int(value)
-            elif dtype == nw.Int32:
-                return int(value)
-            elif dtype == nw.Int64:
-                return int(value)
-            elif dtype == nw.UInt16:
-                return int(value)
-            elif dtype == nw.UInt32:
-                return int(value)
-            elif dtype == nw.UInt64:
-                return int(value)
-            elif dtype == nw.String:
+            elif D in {nw.String, nw.Enum, nw.Categorical}:
                 return str(value)
-            elif dtype == nw.Enum:
-                return str(value)
-            elif dtype == nw.Categorical:
-                return str(value)
-            elif dtype == nw.Boolean:
+            elif D == nw.Boolean:
                 return bool(value)
-            elif dtype == nw.List:
+            elif D == nw.List:
                 # Handle list conversion
                 if isinstance(value, str):
-                    # Attempt to parse string as a list
-                    try:
-                        return list(ast.literal_eval(value))
-                    except (ValueError, SyntaxError):
-                        # If parsing fails, split the string
-                        return value.split(",")
+                    return _try_parse_list_from_str(value)
                 elif isinstance(value, list):
                     return value  # type: ignore
                 else:
-                    # If it's not a string or list, wrap it in a list
                     return [value]
             else:
                 LOGGER.warning(f"Unsupported dtype: {dtype}")
@@ -377,14 +366,12 @@ def _convert_value(
         if original_value is None:
             return value
 
-        # Try to convert the value to the original type
         original_type: Any = type(original_value)
 
         if isinstance(original_value, (int, float)):
             return original_type(value)
         elif isinstance(original_value, str):
             return str(value)
-        # The more specific time checks are handled first to avoid parent classes matching
         elif isinstance(original_value, (datetime.timedelta)):
             return datetime.timedelta(microseconds=float(value))
         elif isinstance(original_value, (datetime.datetime)):
@@ -392,18 +379,11 @@ def _convert_value(
         elif isinstance(original_value, (datetime.date)):
             return datetime.date.fromisoformat(value)
         elif isinstance(original_value, list):
-            # Handle list conversion
             if isinstance(value, str):
-                # Attempt to parse string as a list
-                try:
-                    return list(ast.literal_eval(value))
-                except (ValueError, SyntaxError):
-                    # If parsing fails, split the string
-                    return list(value.split(","))
+                return _try_parse_list_from_str(value)
             elif isinstance(value, list):
                 return value  # type: ignore[return-value]
             else:
-                # If it's not a string or list, wrap it in a list
                 return [value]
         else:
             return value
@@ -635,3 +615,25 @@ def _apply_column_edit_row_oriented(
 
 def _is_valid_index(index: int, length: int) -> bool:
     return index >= 0 and index < length
+
+
+def _try_parse_list_from_str(value: str):
+    """Attempt to return a list from a string representation.
+    Fast path: cache repeated conversions for same value.
+    """
+    cached = _str_list_cache.get(value)
+    if cached is not None:
+        return cached
+    try:
+        result = list(ast.literal_eval(value))
+        # Only cache if conversion is successful and output is not enormous
+        if (
+            len(value) < 1000
+        ):  # Arbitrary cut-off for not caching very large values
+            _str_list_cache[value] = result
+        return result
+    except (ValueError, SyntaxError):
+        result = value.split(",")
+        if len(value) < 1000:
+            _str_list_cache[value] = result
+        return result
