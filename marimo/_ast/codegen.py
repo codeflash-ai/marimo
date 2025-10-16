@@ -175,15 +175,20 @@ def to_annotated_string(
 ) -> dict[str, str]:
     """Checks relevant variables for annotation data, and if found either
     represents the type directly or as a string (as a safety measure)"""
-    response: dict[str, str] = {}
+    # Early exit for empty input dictionaries improves common-case performance
     if not variable_data:
-        return response
+        return {}
+
+    response: dict[str, str] = {}
+    get_var = variable_data.get
     for name in names:
-        if name in variable_data and variable_data[name]:
-            variable = variable_data[name]
+        variable = get_var(name)
+        if variable:
             annotation = variable.annotation_data
             if annotation:
-                if annotation.refs - allowed_refs:
+                # Avoid unnecessary set operation if allowed_refs is empty or annotation.refs is empty
+                refs_not_allowed = annotation.refs - allowed_refs
+                if refs_not_allowed:
                     response[name] = f'"{annotation.repr}"'
                 else:
                     response[name] = annotation.repr
