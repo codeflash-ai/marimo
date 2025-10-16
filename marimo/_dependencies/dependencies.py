@@ -6,6 +6,9 @@ import importlib.util
 import shutil
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
+
+from packaging.version import parse as parse_version
 
 from marimo._dependencies.errors import ManyModulesNotFoundError
 
@@ -159,11 +162,10 @@ def _version_check(
     if min_v is None and max_v is None:
         return True
 
-    from packaging import version
-
-    parsed_min_version = version.parse(min_v) if min_v else None
-    parsed_max_version = version.parse(max_v) if max_v else None
-    parsed_v = version.parse(v)
+    # Only parse the versions when necessary, and cache results for speed
+    parsed_min_version = _cached_parse_version(min_v) if min_v else None
+    parsed_max_version = _cached_parse_version(max_v) if max_v else None
+    parsed_v = _cached_parse_version(v)
 
     if parsed_min_version is not None and parsed_v < parsed_min_version:
         msg = f"Mismatched version of {pkg}: expected >={min_v}, got {v}"
@@ -182,6 +184,11 @@ def _version_check(
         return False
 
     return True
+
+
+@lru_cache(maxsize=2048)
+def _cached_parse_version(version: str) -> object:
+    return parse_version(version)
 
 
 class DependencyManager:
