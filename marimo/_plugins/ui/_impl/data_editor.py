@@ -523,9 +523,6 @@ def _apply_column_edit_column_oriented(
 
     _validate_column_edit(edit, len(data), new_column_name)
 
-    column_idx = edit["columnIdx"]
-    edit_type = edit["type"]
-
     if edit_type == "insert":
         assert new_column_name is not None
 
@@ -536,34 +533,41 @@ def _apply_column_edit_column_oriented(
             data[new_column_name] = [None] * data_length
         else:
             # Insert new column at specific index
-            column_data = data.copy()
+
+            # Build new key order in a single pass, avoiding .copy() and .clear()
+            new_keys = (
+                column_order[:column_idx]
+                + [new_column_name]
+                + column_order[column_idx:]
+            )
+            # Build the value mapping
+            new_data = {}
+            for key in new_keys:
+                if key == new_column_name:
+                    new_data[key] = [None] * data_length
+                else:
+                    new_data[key] = data[key]
             data.clear()
-            for idx, key in enumerate(column_order):
-                if idx == column_idx:
-                    data[new_column_name] = [None] * data_length
-                data[key] = column_data[key]
+            data.update(new_data)
         return
 
-    # Find column by index
-    column_id = None
-    for idx, key in enumerate(column_order):
-        if idx == column_idx:
-            column_id = key
-            break
-
-    if column_id is None:
+    # Find column by index, avoid an additional pass
+    if not (0 <= column_idx < len(column_order)):
         raise ValueError(f"Column index {column_idx} not found")
+    column_id = column_order[column_idx]
 
     if edit_type == "rename":
         assert new_column_name is not None
 
-        column_data = data.copy()
-        data.clear()
+        # Build a new dict with the renamed key in order efficiently
+        new_data = {}
         for key in column_order:
             if key == column_id:
-                data[new_column_name] = column_data[key]
+                new_data[new_column_name] = data[key]
             else:
-                data[key] = column_data[key]
+                new_data[key] = data[key]
+        data.clear()
+        data.update(new_data)
     elif edit_type == "remove":
         del data[column_id]
 
