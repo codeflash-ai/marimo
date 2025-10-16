@@ -21,12 +21,14 @@ from marimo._server.tokens import SkewProtectionToken
 from marimo._utils.versions import is_editable
 from marimo._version import __version__
 
+_escape = html.escape
+
 MOUNT_CONFIG_TEMPLATE = "'{{ mount_config }}'"
 
 
 def _html_escape(text: str) -> str:
     """Escape HTML special characters."""
-    return html.escape(text, quote=True)
+    return _escape(text, quote=True)
 
 
 def _get_mount_config(
