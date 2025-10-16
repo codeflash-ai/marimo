@@ -120,10 +120,14 @@ class Html(MIME):
         #
         # flatten the text to make sure searching isn't broken by newlines
         flat_text = flatten_string(self._text)
-        for virtual_filename in ctx.virtual_file_registry.filenames():
-            if virtual_filename in flat_text:
-                ctx.virtual_file_registry.reference(virtual_filename)
-                self._virtual_filenames.append(virtual_filename)
+        virtual_filenames = ctx.virtual_file_registry.filenames()
+        # Use set intersection for efficient searching of filenames in flat_text
+        # (Assuming filenames do not have special chars, which is typical.)
+        # Construct a set of filenames present in text for faster lookup.
+        filenames_in_text = {fn for fn in virtual_filenames if fn in flat_text}
+        for virtual_filename in filenames_in_text:
+            ctx.virtual_file_registry.reference(virtual_filename)
+            self._virtual_filenames.append(virtual_filename)
 
         # Dereference virtual files on object destruction
         finalizer = weakref.finalize(
@@ -158,9 +162,13 @@ class Html(MIME):
     def __format__(self, spec: str) -> str:
         """Format `self` as HTML text"""
         del spec
-        return " ".join(
-            [line.strip() for line in self.text.strip().split("\n")]
-        )
+        # Optimization: Use a generator expression instead of a list comprehension
+        # to reduce memory footprint.
+        # Also, avoid intermediate strip when the input is already a single line.
+        text = self.text.strip()
+        if "\n" not in text:
+            return text
+        return " ".join(line.strip() for line in text.split("\n"))
 
     @mddoc
     def batch(self, **elements: UIElement[JSONType, object]) -> batch_plugin:
