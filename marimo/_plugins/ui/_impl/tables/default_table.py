@@ -35,6 +35,8 @@ from marimo._plugins.ui._impl.tables.table_manager import (
     TableManager,
 )
 
+_dependency_cache = {}
+
 JsonTableData = Union[
     Sequence[Union[str, int, float, bool, MIME, None]],
     Sequence[JSONType],
@@ -309,18 +311,19 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return []
 
     def _as_table_manager(self) -> TableManager[Any]:
-        if DependencyManager.pandas.has():
+        has_pandas, has_polars = _get_cached_dependency_info()
+
+        if has_pandas:
             import pandas as pd
 
             return PandasTableManagerFactory.create()(pd.DataFrame(self.data))
-        if DependencyManager.polars.has():
+        if has_polars:
             import polars as pl
 
             if isinstance(self.data, dict) and not self.is_column_oriented:
                 return PolarsTableManagerFactory.create()(
                     pl.DataFrame(self._normalize_data(self.data))
                 )
-
             return PolarsTableManagerFactory.create()(
                 pl.DataFrame(cast(Any, self.data))
             )
@@ -450,20 +453,18 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def _normalize_data(data: JsonTableData) -> list[dict[str, Any]]:
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
-        if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
-            column_values = data.values()
-            column_names = list(data.keys())
-            return [
-                dict(zip(column_names, row_values))
-                for row_values in zip(*column_values)
-            ]
-
-        # If its a dictionary, convert to key-value pairs
         if isinstance(data, dict):
+            if _is_column_oriented(data):
+                # reshape column major
+                #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
+                # into row major
+                #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
+                column_values = data.values()
+                column_names = list(data.keys())
+                return [
+                    dict(zip(column_names, row_values))
+                    for row_values in zip(*column_values)
+                ]
             return [{KEY: key, VALUE: value} for key, value in data.items()]
 
         # Assert that data is a list
@@ -496,3 +497,10 @@ def _is_column_oriented(data: JsonTableData) -> bool:
     return isinstance(data, dict) and all(
         isinstance(value, (list, tuple)) for value in data.values()
     )
+
+
+def _get_cached_dependency_info():
+    if not _dependency_cache:
+        _dependency_cache["has_pandas"] = DependencyManager.pandas.has()
+        _dependency_cache["has_polars"] = DependencyManager.polars.has()
+    return _dependency_cache["has_pandas"], _dependency_cache["has_polars"]
