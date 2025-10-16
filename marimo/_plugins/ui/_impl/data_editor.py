@@ -486,10 +486,12 @@ def _apply_row_edit_row_oriented(
 ) -> None:
     """Apply a row edit to row-oriented data."""
     rowIdx = edit["rowIdx"]
-    if not _is_valid_index(rowIdx, len(data)):
+    # Avoid function call overhead by inlining the index validation
+    if rowIdx < 0 or rowIdx >= len(data):
         return
     if edit["type"] == "remove":
-        data.pop(rowIdx)
+        # Use del instead of pop when not using the return value for slightly better performance
+        del data[rowIdx]
 
 
 def _validate_column_edit(
