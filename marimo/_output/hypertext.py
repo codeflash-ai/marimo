@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from marimo._plugins.ui._core.ui_element import UIElement
     from marimo._plugins.ui._impl.batch import batch as batch_plugin
 
+_flex_module = None
+
 
 def _hypertext_cleanup(virtual_filenames: list[str]) -> None:
     """Cleanup side-effects related to initialization of Html."""
@@ -202,9 +204,12 @@ class Html(MIME):
         Returns:
             An `Html` object.
         """
-        from marimo._plugins.stateless import flex
+        global _flex_module
+        if _flex_module is None:
+            from marimo._plugins.stateless import flex as _flex_module_inner
 
-        return flex.hstack([self], justify="center")
+            _flex_module = _flex_module_inner
+        return _flex_module.hstack([self], justify="center")
 
     @mddoc
     def right(self) -> Html:
