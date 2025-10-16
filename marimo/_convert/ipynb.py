@@ -91,35 +91,30 @@ def transform_add_marimo_import(sources: list[CodeCell]) -> list[CodeCell]:
     the `mo.md` or `mo.sql` functions.
     """
 
-    def contains_mo(cell: str) -> bool:
-        return cell.startswith("mo.md(") or "mo.sql(" in cell
+    already_has_marimo_import = False
+    for cell in sources:
+        cell_source = cell.source
+        if "import marimo as mo" not in cell_source:
+            continue
 
-    def has_marimo_import(cell: str) -> bool:
-        # Quick check
-        if "import marimo as mo" not in cell:
-            return False
-
-        def is_in_import_line(line: str) -> bool:
+        lines = cell_source.strip().split("\n")
+        for line in lines:
             if line.startswith("import marimo as mo"):
-                return True
+                already_has_marimo_import = True
+                break
             if line.startswith("import ") or line.startswith("from "):
-                return "import marimo as mo" in line
-            return False
+                if "import marimo as mo" in line:
+                    already_has_marimo_import = True
+                    break
+        if already_has_marimo_import:
+            break
 
-        # Slow check
-        lines = cell.strip().split("\n")
-        if any(is_in_import_line(line) for line in lines):
-            return True
-        return False
-
-    already_has_marimo_import = any(
-        has_marimo_import(cell.source) for cell in sources
-    )
     if already_has_marimo_import:
         return sources
 
-    if any(contains_mo(cell.source) for cell in sources):
-        return sources + [CodeCell("import marimo as mo")]
+    for cell in sources:
+        if cell.source.startswith("mo.md(") or "mo.sql(" in cell.source:
+            return sources + [CodeCell("import marimo as mo")]
 
     return sources
 
