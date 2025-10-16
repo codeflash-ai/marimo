@@ -65,8 +65,60 @@ def format_row(
 def format_column(
     col: str, values: list[JSONType], format_mapping: FormatMapping
 ) -> list[JSONType]:
-    # Return None if the format mapping is None
     if format_mapping is None:
         return values
-    # Apply formatting to each value in a column list
-    return [format_value(col, value, format_mapping) for value in values]
+    formatter = format_mapping.get(col)
+    if formatter is None:
+        return values
+    # Inline the main logic loop to avoid repeated dict lookups
+    result: list[JSONType] = []
+    append_result = result.append
+    # Handle string formatter
+    if isinstance(formatter, str):
+        has_d = "d" in formatter
+        for value in values:
+            if value is None:
+                append_result(value)
+                continue
+            # Fast path for integer with 'd' formatter
+            if isinstance(value, int) and has_d:
+                try:
+                    append_result(formatter.format(value))
+                except Exception as e:
+                    LOGGER.warning(
+                        f"Error formatting for value {value} in column {col}: {str(e)}"
+                    )
+                    append_result(value)
+                continue
+            # Numeric formatting
+            if isinstance(value, (int, float)):
+                try:
+                    append_result(formatter.format(float(value)))
+                except Exception as e:
+                    LOGGER.warning(
+                        f"Error formatting for value {value} in column {col}: {str(e)}"
+                    )
+                    append_result(value)
+                continue
+            # Generic formatting
+            try:
+                append_result(formatter.format(value))
+            except Exception as e:
+                LOGGER.warning(
+                    f"Error formatting for value {value} in column {col}: {str(e)}"
+                )
+                append_result(value)
+        return result
+    # Callable formatter
+    if callable(formatter):
+        for value in values:
+            try:
+                append_result(formatter(value))
+            except Exception as e:
+                LOGGER.warning(
+                    f"Error formatting for value {value} in column {col}: {str(e)}"
+                )
+                append_result(value)
+        return result
+    # Unrecognized formatter type, fallback to plain values
+    return values
