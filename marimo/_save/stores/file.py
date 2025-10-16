@@ -1,6 +1,7 @@
 # Copyright 2025 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -9,7 +10,13 @@ from marimo._save.stores.store import Store
 
 
 def _valid_path(path: Path) -> bool:
-    return path.exists() and path.stat().st_size > 0
+    # Avoid repeated stat call: use os.stat for direct access to st_size
+    # and handle missing file (not exists) via FileNotFoundError, which is
+    # faster than path.exists() + path.stat()
+    try:
+        return os.stat(path).st_size > 0
+    except FileNotFoundError:
+        return False
 
 
 class FileStore(Store):
