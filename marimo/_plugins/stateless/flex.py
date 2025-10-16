@@ -200,6 +200,12 @@ def hstack(
     Returns:
         Html: An Html object.
     """
+    # Avoid repeated list construction/checks and make the logic branch outside call
+    if widths == "equal":
+        child_flexes = (1,) * len(items)
+    else:
+        child_flexes = widths
+
     return _flex(
         items,
         direction="row",
@@ -207,9 +213,7 @@ def hstack(
         align=align,
         wrap=wrap,
         gap=gap,
-        child_flexes=[1 for _ in range(len(items))]
-        if widths == "equal"
-        else widths,
+        child_flexes=child_flexes,
     )
 
 
