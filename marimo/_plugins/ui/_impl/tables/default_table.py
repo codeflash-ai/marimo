@@ -493,6 +493,19 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
 
 def _is_column_oriented(data: JsonTableData) -> bool:
-    return isinstance(data, dict) and all(
-        isinstance(value, (list, tuple)) for value in data.values()
-    )
+    # Use short-circuiting early if not a dict,
+    # then avoid constructing a generator if data is empty,
+    # and use a fast all() with tuple as required.
+    if not isinstance(data, dict):
+        return False
+    values = data.values()
+    # Quick path: if dict is empty, column-oriented by definition
+    # (matches original behavior)
+    if not values:
+        return True
+    # Use built-in all() with tuple for a slight speedup over dynamic lookup
+    value_type = (list, tuple)
+    for value in values:
+        if not isinstance(value, value_type):
+            return False
+    return True
