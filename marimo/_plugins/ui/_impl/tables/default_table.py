@@ -35,6 +35,10 @@ from marimo._plugins.ui._impl.tables.table_manager import (
     TableManager,
 )
 
+_has_pandas = None
+
+_has_polars = None
+
 JsonTableData = Union[
     Sequence[Union[str, int, float, bool, MIME, None]],
     Sequence[JSONType],
@@ -109,10 +113,12 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return encode_json_str(SuperJson(normalized))
 
     def to_parquet(self) -> bytes:
-        if isinstance(self.data, dict) and not self.is_column_oriented:
-            return DefaultTableManager(
-                self._normalize_data(self.data)
-            ).to_parquet()
+        data = self.data
+        is_col_oriented = self.is_column_oriented
+        if isinstance(data, dict) and not is_col_oriented:
+            # Only normalize dicts that are not column oriented
+            normalized = self._normalize_data(data)
+            return DefaultTableManager(normalized).to_parquet()
         return self._as_table_manager().to_parquet()
 
     def select_rows(self, indices: list[int]) -> DefaultTableManager:
@@ -309,21 +315,22 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return []
 
     def _as_table_manager(self) -> TableManager[Any]:
-        if DependencyManager.pandas.has():
+        # Use cached dependency detection
+        if _get_has_pandas():
             import pandas as pd
 
-            return PandasTableManagerFactory.create()(pd.DataFrame(self.data))
-        if DependencyManager.polars.has():
+            factory = PandasTableManagerFactory.create()
+            return factory(pd.DataFrame(self.data))
+        if _get_has_polars():
             import polars as pl
 
-            if isinstance(self.data, dict) and not self.is_column_oriented:
-                return PolarsTableManagerFactory.create()(
-                    pl.DataFrame(self._normalize_data(self.data))
-                )
+            data = self.data
+            is_col_oriented = self.is_column_oriented
 
-            return PolarsTableManagerFactory.create()(
-                pl.DataFrame(cast(Any, self.data))
-            )
+            factory = PolarsTableManagerFactory.create()
+            if isinstance(data, dict) and not is_col_oriented:
+                return factory(pl.DataFrame(self._normalize_data(data)))
+            return factory(pl.DataFrame(cast(Any, data)))
 
         raise ValueError("No supported table libraries found.")
 
@@ -451,10 +458,6 @@ class DefaultTableManager(TableManager[JsonTableData]):
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
         if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
             column_values = data.values()
             column_names = list(data.keys())
             return [
@@ -464,6 +467,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
         # If its a dictionary, convert to key-value pairs
         if isinstance(data, dict):
+            # This is dict, but not column-oriented
             return [{KEY: key, VALUE: value} for key, value in data.items()]
 
         # Assert that data is a list
@@ -477,15 +481,13 @@ class DefaultTableManager(TableManager[JsonTableData]):
             return []
 
         # Handle single-column data
-        if not isinstance(data[0], dict):
-            if not isinstance(data[0], (str, int, float, bool, type(None))):
+        first = data[0]
+        if not isinstance(first, dict):
+            if not isinstance(first, (str, int, float, bool, type(None))):
                 raise ValueError(
                     "data must be a sequence of JSON-serializable types, or a "
                     "sequence of dicts."
                 )
-
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
             casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
             return [{"value": datum} for datum in casted]
         # Sequence of dicts
@@ -496,3 +498,17 @@ def _is_column_oriented(data: JsonTableData) -> bool:
     return isinstance(data, dict) and all(
         isinstance(value, (list, tuple)) for value in data.values()
     )
+
+
+def _get_has_pandas():
+    global _has_pandas
+    if _has_pandas is None:
+        _has_pandas = DependencyManager.pandas.has()
+    return _has_pandas
+
+
+def _get_has_polars():
+    global _has_polars
+    if _has_polars is None:
+        _has_polars = DependencyManager.polars.has()
+    return _has_polars
