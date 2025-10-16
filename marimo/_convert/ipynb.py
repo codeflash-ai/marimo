@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import bisect
 import json
 import re
 import sys
@@ -368,20 +369,23 @@ class Renamer:
     def __init__(self, cell_remappings: dict[int, dict[str, str]]) -> None:
         self.cell_remappings = cell_remappings
         self.made_changes = False
+        # Create a sorted list of remapping cell indices for binary search
+        self._remapping_indices = sorted(self.cell_remappings)
 
     def _maybe_rename(self, cell: int, name: str, is_reference: bool) -> str:
-        latest_mapping: dict[str, str] = {}
+        # Find the highest index <= cell (if is_reference) or < cell+1 (if not)
         until = cell if is_reference else cell + 1
-        for idx in range(until):
-            if (
-                idx in self.cell_remappings
-                and name in self.cell_remappings[idx]
-            ):
-                latest_mapping = self.cell_remappings[idx]
-        if name in latest_mapping:
-            return latest_mapping[name]
-        else:
-            return name
+        idxs = self._remapping_indices
+        # Use bisect_right to find the insertion point, which gives us
+        # the number of remappings at indices < until.
+        pos = bisect.bisect_right(idxs, until - 1)
+        # Scan backwards for a cell_remapping that includes the name
+        for i in range(pos - 1, -1, -1):
+            idx = idxs[i]
+            mapping = self.cell_remappings[idx]
+            if name in mapping:
+                return mapping[name]
+        return name
 
     def rename_named_node(
         self, cell: int, node: NamedNode, is_reference: bool
