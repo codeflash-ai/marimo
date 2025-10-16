@@ -428,33 +428,36 @@ class Renamer:
 
 
 def _transform_aug_assign(sources: list[str]) -> list[str]:
-    new_sources = sources.copy()
+    new_sources = None
+
+    class AugAssignTransformer(ast.NodeTransformer):
+        def __init__(self):
+            self.made_changes = False
+
+        def visit_AugAssign(self, node: ast.AugAssign) -> ast.Assign:
+            self.made_changes = True
+            return ast.Assign(
+                targets=[node.target],
+                value=ast.BinOp(
+                    left=node.target, op=node.op, right=node.value
+                ),
+            )
+
     for i, source in enumerate(sources):
         try:
             tree = ast.parse(source)
         except SyntaxError:
             continue
 
-        made_changes = False
-
-        class AugAssignTransformer(ast.NodeTransformer):
-            def visit_AugAssign(self, node: ast.AugAssign) -> ast.Assign:
-                nonlocal made_changes
-                made_changes = True
-                return ast.Assign(
-                    targets=[node.target],
-                    value=ast.BinOp(
-                        left=node.target, op=node.op, right=node.value
-                    ),
-                )
-
-        transformed = ast.fix_missing_locations(
-            AugAssignTransformer().visit(tree)
-        )
-        if made_changes:
+        transformer = AugAssignTransformer()
+        transformed = transformer.visit(tree)
+        if transformer.made_changes:
+            transformed = ast.fix_missing_locations(transformed)
+            if new_sources is None:
+                new_sources = sources.copy()
             new_sources[i] = ast.unparse(transformed)
 
-    return new_sources
+    return new_sources if new_sources is not None else sources
 
 
 def transform_duplicate_definitions(sources: list[str]) -> list[str]:
