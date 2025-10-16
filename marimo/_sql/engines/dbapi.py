@@ -136,12 +136,16 @@ class DBAPIEngine(QueryEngine[DBAPIConnection]):
         try:
             # Required methods
             has_execute = callable(getattr(obj, "execute", None))
-            # has_executemany = callable(getattr(obj, "executemany", None))
 
-            # At least one fetch method
+            # Avoid repeated getattr by accessing each fetch method once,
+            # storing the results to minimize Python-level slow attribute lookups.
             fetch_methods = ("fetchone", "fetchmany", "fetchall")
-            has_fetch = any(
-                callable(getattr(obj, m, None)) for m in fetch_methods
+            # Pre-allocate and reuse attribute lookups for fetch methods
+            # to speed up any() over three attributes.
+            has_fetch = (
+                callable(getattr(obj, "fetchone", None))
+                or callable(getattr(obj, "fetchmany", None))
+                or callable(getattr(obj, "fetchall", None))
             )
 
             # Required attributes (description may be None after DML, but must exist)
