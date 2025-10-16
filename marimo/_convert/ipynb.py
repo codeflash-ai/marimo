@@ -24,6 +24,10 @@ from marimo._schemas.serialization import (
 )
 from marimo._types.ids import CellId_t
 
+_INLINE_META_PATTERN = re.compile(
+    r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
+)
+
 # Define a type for our 1:1 source-only transform functions
 Transform = Callable[[list[str]], list[str]]
 
@@ -699,12 +703,10 @@ def extract_inline_meta(script: str) -> tuple[str | None, str]:
 
     Returns a tuple of the metadata comment and the remaining script.
     """
-    if match := re.search(
-        r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$",
-        script,
-    ):
+    if match := _INLINE_META_PATTERN.search(script):
         meta_comment = match.group(0)
-        return meta_comment, script.replace(meta_comment, "").strip()
+        start, end = match.span()
+        return meta_comment, (script[:start] + script[end:]).strip()
     return None, script
 
 
