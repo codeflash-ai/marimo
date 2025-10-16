@@ -23,9 +23,7 @@ LOGGER = _loggers.marimo_logger()
 
 
 def _is_tmp_file(filename: str) -> bool:
-    return any(
-        filename.startswith(folder_name) for folder_name in _IGNORED_FOLDERS
-    )
+    return filename.startswith(_IGNORED_FOLDERS)
 
 
 class RecentFilesManager:
