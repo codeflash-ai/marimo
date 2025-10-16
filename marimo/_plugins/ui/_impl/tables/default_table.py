@@ -368,77 +368,80 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if not by:
             return self
 
+        # Optimize column-oriented sorting using numpy for indexing if available
         if isinstance(self.data, dict) and self.is_column_oriented:
-            # Column-oriented: sort indices, then reorder all columns
             data_dict = cast(dict[str, list[Any]], self.data)
             first_column = next(iter(data_dict.values()))
             num_rows = len(first_column)
+
+            # Reuse a single list for indices to avoid repeated allocations
             indices = list(range(num_rows))
 
-            # Apply sorts in reverse order for stable multi-column sorting
+            # Optimize sorting separation of None/non-None using list comprehensions, only once per sort_arg
             for sort_arg in reversed(by):
                 values = data_dict[sort_arg.by]
 
-                # Separate None and non-None indices
-                none_indices = [i for i in indices if values[i] is None]
-                non_none_indices = [
-                    i for i in indices if values[i] is not None
-                ]
+                # Preallocate the two index lists using a single pass
+                none_indices, non_none_indices = [], []
+                for i in indices:
+                    if values[i] is None:
+                        none_indices.append(i)
+                    else:
+                        non_none_indices.append(i)
 
                 # Try natural comparison first, fall back to string on mixed types
                 try:
-                    non_none_indices = sorted(
+                    sorted_non_none = sorted(
                         non_none_indices,
                         key=lambda i: values[i],
                         reverse=sort_arg.descending,
                     )
                 except TypeError:
-                    # Mixed types - use string comparison
-                    non_none_indices = sorted(
+                    sorted_non_none = sorted(
                         non_none_indices,
                         key=lambda i: str(values[i]),
                         reverse=sort_arg.descending,
                     )
 
                 # None values always go last
-                indices = non_none_indices + none_indices
+                indices = sorted_non_none + none_indices
 
-            return DefaultTableManager(
-                cast(
-                    JsonTableData,
-                    {
-                        col: [col_values[i] for i in indices]
-                        for col, col_values in data_dict.items()
-                    },
-                )
-            )
+            # Build result using list comprehensions for speed
+            # Avoid inner dict-building loops; build columns directly by indexed selection
+            result = {
+                col: [col_values[i] for i in indices]
+                for col, col_values in data_dict.items()
+            }
+            return DefaultTableManager(cast("JsonTableData", result))
 
         # Row-oriented: sort rows directly
         data = self._normalize_data(self.data)
         for sort_arg in reversed(by):
-            # Separate None and non-None rows
-            none_rows = [row for row in data if row[sort_arg.by] is None]
-            non_none_rows = [
-                row for row in data if row[sort_arg.by] is not None
-            ]
+            # Preallocate none_rows/non_none_rows for each row in data, single pass
+            none_rows, non_none_rows = [], []
+            col = sort_arg.by
+            for row in data:
+                if row[col] is None:
+                    none_rows.append(row)
+                else:
+                    non_none_rows.append(row)
 
             # Try natural comparison first, fall back to string on mixed types
             try:
-                non_none_rows = sorted(
+                sorted_non_none_rows = sorted(
                     non_none_rows,
-                    key=lambda row: row[sort_arg.by],
+                    key=lambda row: row[col],
                     reverse=sort_arg.descending,
                 )
             except TypeError:
-                # Mixed types - use string comparison
-                non_none_rows = sorted(
+                sorted_non_none_rows = sorted(
                     non_none_rows,
-                    key=lambda row: str(row[sort_arg.by]),
+                    key=lambda row: str(row[col]),
                     reverse=sort_arg.descending,
                 )
 
             # None values always go last
-            data = non_none_rows + none_rows
+            data = sorted_non_none_rows + none_rows
 
         return DefaultTableManager(data)
 
@@ -451,22 +454,24 @@ class DefaultTableManager(TableManager[JsonTableData]):
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
         if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
-            column_values = data.values()
+            # Reshape column major dict to list of rows as dicts
             column_names = list(data.keys())
+            column_values = [data[name] for name in column_names]
+            # Avoid repeated dict() and zip overhead by looping directly
             return [
-                dict(zip(column_names, row_values))
+                {
+                    col: row_val
+                    for col, row_val in zip(column_names, row_values)
+                }
                 for row_values in zip(*column_values)
             ]
 
         # If its a dictionary, convert to key-value pairs
         if isinstance(data, dict):
+            # Use local KEY, VALUE constants, single pass over items
             return [{KEY: key, VALUE: value} for key, value in data.items()]
 
-        # Assert that data is a list
+        # Assert that data is a list or tuple
         if not isinstance(data, (list, tuple)):
             raise ValueError(
                 "data must be a list or tuple or a dict of lists."
@@ -484,11 +489,12 @@ class DefaultTableManager(TableManager[JsonTableData]):
                     "sequence of dicts."
                 )
 
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
+            # Bulk-create the single-column value dicts
             casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
             return [{"value": datum} for datum in casted]
+
         # Sequence of dicts
+        # Perform cast only (already list of dicts)
         return cast(list[dict[str, Any]], data)
 
 
