@@ -332,7 +332,6 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return ColumnStats()
 
     def get_bin_values(self, column: str, num_bins: int) -> list[BinValue]:
-        del column, num_bins
         return []
 
     def get_num_rows(self, force: bool = True) -> int:
