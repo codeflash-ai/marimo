@@ -27,7 +27,12 @@ def deep_merge(
     original: dict[Any, Any], update: dict[Any, Any]
 ) -> dict[Any, Any]:
     """Deep merge of two dicts."""
-    return {
-        key: _merge_key(original, update, key)
-        for key in set(original.keys()).union(set(update.keys()))
-    }
+    keys_seen = set()
+    result = {}
+    for key in original.keys():
+        keys_seen.add(key)
+        result[key] = _merge_key(original, update, key)
+    for key in update.keys():
+        if key not in keys_seen:
+            result[key] = _merge_key(original, update, key)
+    return result
