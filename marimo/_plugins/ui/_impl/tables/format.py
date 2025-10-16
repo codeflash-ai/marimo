@@ -56,10 +56,10 @@ def format_row(
     if format_mapping is None:
         return row
     # Apply formatting to each value in a row dictionary
-    return {
-        col: format_value(col, value, format_mapping)
-        for col, value in row.items()
-    }
+    result = {}
+    for col, value in row.items():
+        result[col] = format_value(col, value, format_mapping)
+    return result
 
 
 def format_column(
@@ -69,4 +69,7 @@ def format_column(
     if format_mapping is None:
         return values
     # Apply formatting to each value in a column list
-    return [format_value(col, value, format_mapping) for value in values]
+    result = []
+    for value in values:
+        result.append(format_value(col, value, format_mapping))
+    return result
