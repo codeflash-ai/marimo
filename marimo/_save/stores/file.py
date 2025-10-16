@@ -9,7 +9,11 @@ from marimo._save.stores.store import Store
 
 
 def _valid_path(path: Path) -> bool:
-    return path.exists() and path.stat().st_size > 0
+    try:
+        st = path.stat()
+        return st.st_size > 0
+    except FileNotFoundError:
+        return False
 
 
 class FileStore(Store):
@@ -50,7 +54,8 @@ class FileStore(Store):
 
     def clear(self, key: str) -> bool:
         path = self.save_path / key
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
         if not _valid_path(path):
             return False
         path.unlink()
