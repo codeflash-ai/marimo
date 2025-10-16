@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from pandas import DataFrame
     from PIL.Image import Image as PILImage
 
+_mime_type_ext_map = {}
+
 
 def guess_mime_type(
     src: Union[str, bytes, io.BytesIO, io.BufferedReader, None],
@@ -42,7 +44,12 @@ def guess_mime_type(
 
 
 def mime_type_to_ext(mime_type: str) -> Optional[str]:
-    return mimetypes.guess_extension(mime_type, strict=False)
+    ext = _mime_type_ext_map.get(mime_type)
+    if ext is not None or mime_type in _mime_type_ext_map:
+        return ext
+    ext = mimetypes.guess_extension(mime_type, strict=False)
+    _mime_type_ext_map[mime_type] = ext
+    return ext
 
 
 def io_to_data_url(
