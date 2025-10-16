@@ -72,10 +72,18 @@ def get_unique(
 def pop_local(available: list[tuple[int, CellId_t]], idx: int) -> CellId_t:
     """Find and pop the index that is closest to idx"""
     # NB. by min implementation a preference is given to the lower index when equidistant
-    best_idx = min(
-        range(len(available)), key=lambda i: abs(available[i][0] - idx)
-    )
-    return available.pop(best_idx)[1]
+    if not available:
+        # Let ValueError ("min() arg is an empty sequence") propagate as before
+        return min([], key=lambda _: 0)
+    # Find the best index and value in a single pass
+    min_dist = float("inf")
+    best_i = -1
+    for i, (cell_idx, _) in enumerate(available):
+        dist = abs(cell_idx - idx)
+        if dist < min_dist:
+            min_dist = dist
+            best_i = i
+    return available.pop(best_i)[1]
 
 
 def _hungarian_algorithm(scores: list[list[float]]) -> list[int]:
