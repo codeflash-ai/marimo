@@ -2909,18 +2909,24 @@ class PackagesCallbacks:
             return
 
         try:
-            LOGGER.debug(
-                "Updating script metadata: %s. Adding namespaces: %s.",
-                filename,
-                import_namespaces_to_add,
-            )
+            # Check if debug logging is enabled before formatting/logging
+            if LOGGER.isEnabledFor(10):  # logging.DEBUG == 10
+                LOGGER.debug(
+                    "Updating script metadata: %s. Adding namespaces: %s.",
+                    filename,
+                    import_namespaces_to_add,
+                )
             self.package_manager.update_notebook_script_metadata(
                 filepath=filename,
                 import_namespaces_to_add=import_namespaces_to_add,
                 upgrade=False,
             )
         except Exception as e:
-            LOGGER.error("Failed to add script metadata to notebook: %s", e)
+            # Check if error logging is enabled before logging
+            if LOGGER.isEnabledFor(40):  # logging.ERROR == 40
+                LOGGER.error(
+                    "Failed to add script metadata to notebook: %s", e
+                )
 
 
 class CacheCallbacks:
