@@ -81,27 +81,41 @@ class JSONFormatter(DiagnosticFormatter):
         self, diagnostic: Diagnostic, filename: str
     ) -> DiagnosticJSON:
         """Convert diagnostic to typed JSON dictionary."""
+        # Avoid tuple/list conversions and extra branching
         lines, columns = diagnostic.sorted_lines
 
-        # Build complete dict with all fields
-        result = {
-            "type": "diagnostic",
-            "message": diagnostic.message,
-            "filename": filename,
-            "line": lines[0] if lines else 0,
-            "column": columns[0] if columns else 0,
-            "lines": list(lines) if len(lines) > 1 else None,
-            "columns": list(columns) if len(columns) > 1 else None,
-            "severity": diagnostic.severity.value
-            if diagnostic.severity
-            else None,
-            "name": diagnostic.name,
-            "code": diagnostic.code,
-            "fixable": diagnostic.fixable,
-            "fix": diagnostic.fix,
-            "cell_id": diagnostic.cell_id,
-        }
+        line = lines[0] if lines else 0
+        column = columns[0] if columns else 0
+        # Defer allocation of lists by using locals for >1 branching
+        lines_out = None
+        columns_out = None
+        if len(lines) > 1:
+            lines_out = list(lines)
+        if len(columns) > 1:
+            columns_out = list(columns)
 
-        # Filter out None values and return as typed dict
-        filtered = {k: v for k, v in result.items() if v is not None}
+        severity_value = (
+            diagnostic.severity.value
+            if diagnostic.severity is not None
+            else None
+        )
+
+        # Use a tuple of raw fields to avoid extra dict allocation before filtering
+        items = (
+            ("type", "diagnostic"),
+            ("message", diagnostic.message),
+            ("filename", filename),
+            ("line", line),
+            ("column", column),
+            ("lines", lines_out),
+            ("columns", columns_out),
+            ("severity", severity_value),
+            ("name", diagnostic.name),
+            ("code", diagnostic.code),
+            ("fixable", diagnostic.fixable),
+            ("fix", diagnostic.fix),
+            ("cell_id", diagnostic.cell_id),
+        )
+        # Filter out None values in construction loop for lower peak memory use
+        filtered = {k: v for k, v in items if v is not None}
         return DiagnosticJSON(filtered)  # type: ignore
