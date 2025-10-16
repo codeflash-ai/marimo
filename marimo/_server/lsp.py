@@ -434,8 +434,9 @@ def any_lsp_server_running(config: MarimoConfig) -> bool:
     # Check if any language servers or copilot are enabled
     copilot_enabled = config["completion"]["copilot"]
     language_servers = config.get("language_servers", {})
-    language_servers_enabled = any(
-        cast(dict[str, Any], server).get("enabled", False)
-        for server in language_servers.values()
-    )
-    return (copilot_enabled is not False) or language_servers_enabled
+    if copilot_enabled is not False:
+        return True
+    for server in language_servers.values():
+        if server.get("enabled", False):
+            return True
+    return False
