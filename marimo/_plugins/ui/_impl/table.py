@@ -58,6 +58,7 @@ from marimo._plugins.validators import (
     validate_page_size,
 )
 from marimo._runtime.context.types import (
+    _THREAD_LOCAL_CONTEXT,
     ContextNotInitializedError,
     get_context,
 )
@@ -190,12 +191,10 @@ def get_default_table_page_size() -> int:
 
 def get_default_table_max_columns() -> int:
     """Get the default maximum number of columns to display in a table."""
-    try:
-        ctx = get_context()
-    except ContextNotInitializedError:
+    ctx = _THREAD_LOCAL_CONTEXT.runtime_context
+    if ctx is None:
         return DEFAULT_MAX_COLUMNS
-    else:
-        return ctx.marimo_config["display"]["default_table_max_columns"]
+    return ctx.marimo_config["display"]["default_table_max_columns"]
 
 
 @mddoc
