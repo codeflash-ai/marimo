@@ -27,6 +27,9 @@ from marimo._sql.engines.types import (
 )
 from marimo._types.ids import VariableName
 
+# Module-level cache for default datasources config fallback
+_default_datasources_config: dict | None = None
+
 LOGGER = _loggers.marimo_logger()
 
 # TODO: this is O(n) and can be O(1) using similar logic to the
@@ -127,14 +130,21 @@ def get_datasources_config() -> DatasourcesConfig:
             f"Failed to get datasources config from context: {e}. Falling back to default config."
         )
 
+    global _default_datasources_config
+    if _default_datasources_config is not None:
+        return _default_datasources_config
+
     try:
-        return (
+        config = (
             get_default_config_manager(current_path=None)
             .get_config()
             .get("datasources", {})
         )
+        _default_datasources_config = config
+        return config
     except Exception as e:
         LOGGER.warning(
             f"Failed to get datasources config from default config: {e}. Returning empty config."
         )
+        _default_datasources_config = {}
         return {}
