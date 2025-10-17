@@ -56,7 +56,15 @@ def get_default_config_manager(
     # Current path should be the notebook file
     # If it's not known, use the current working directory
     if current_path is None:
-        current_path = os.getcwd()
+        global _default_config_manager
+        if _default_config_manager is None:
+            cp = os.getcwd()
+            _default_config_manager = MarimoConfigManager(
+                UserConfigManager(),
+                ProjectConfigManager(cp),
+                ScriptConfigManager(cp),
+            )
+        return _default_config_manager
 
     return MarimoConfigManager(
         UserConfigManager(),
@@ -351,6 +359,9 @@ class UserConfigManager(MarimoConfigReader):
         self, config: Union[MarimoConfig, PartialMarimoConfig]
     ) -> MarimoConfig:
         import tomlkit
+
+        # Module-level singleton for default config manager
+        _default_config_manager: Optional[MarimoConfigManager] = None
 
         config_path = self.get_config_path()
         LOGGER.info("Saving user configuration to %s", config_path)
