@@ -43,6 +43,9 @@ class EntryPointRegistry(Generic[T]):
 
         # Convert entry point group to env var format (e.g. marimo.cell.executor -> MARIMO_CELL_EXECUTOR)
         self._env_prefix = entry_point_group.replace(".", "_").upper()
+        # Store env keys for reuse in _is_allowed
+        self._denylist_var = f"{self._env_prefix}_DENYLIST"
+        self._allowlist_var = f"{self._env_prefix}_ALLOWLIST"
 
     def _is_allowed(self, name: str) -> bool:
         """Check if an extension name is allowed based on environment variables.
@@ -53,22 +56,22 @@ class EntryPointRegistry(Generic[T]):
         Returns:
             True if the extension is allowed, False otherwise.
         """
-        # Check denylist first
-        denylist_var = f"{self._env_prefix}_DENYLIST"
-        if denylist_var in os.environ:
-            denylist = {
-                n.strip().lower() for n in os.environ[denylist_var].split(",")
-            }
-            if name.lower() in denylist:
+        # Fetch values from os.environ only once per check and avoid intermediate set creation if possible
+        key_lower = name.lower()
+
+        denylist_val = os.environ.get(self._denylist_var)
+        if denylist_val is not None:
+            # Use a generator expression for splitting & stripping to avoid creating a list if possible
+            if key_lower in (
+                n.strip().lower() for n in denylist_val.split(",")
+            ):
                 return False
 
-        # Then check allowlist
-        allowlist_var = f"{self._env_prefix}_ALLOWLIST"
-        if allowlist_var in os.environ:
-            allowlist = {
-                n.strip().lower() for n in os.environ[allowlist_var].split(",")
-            }
-            return name.lower() in allowlist
+        allowlist_val = os.environ.get(self._allowlist_var)
+        if allowlist_val is not None:
+            # Use a set comprehension once here (as the matching requires O(1) lookup)
+            allowlist = {n.strip().lower() for n in allowlist_val.split(",")}
+            return key_lower in allowlist
 
         return True
 
