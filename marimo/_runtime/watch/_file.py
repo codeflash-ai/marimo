@@ -71,7 +71,8 @@ class FileState(PathState):
     def read_text(self) -> str:
         """Read the file as a string."""
         text = self._value.read_text()
-        write_side_effect(f"read_text:{text}")
+        # Defer formatting unless context is installed
+        write_side_effect(lambda: f"read_text:{text}")
         return text
 
     def write_text(self, value: str) -> int:

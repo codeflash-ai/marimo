@@ -33,7 +33,11 @@ def write_side_effect(data: str | bytes) -> None:
     except ContextNotInitializedError:
         # Context is not initialized, nothing we can do
         return
-    ctx.cell_lifecycle_registry.add(SideEffect(data))
+    if callable(data):
+        payload = data()
+    else:
+        payload = data
+    ctx.cell_lifecycle_registry.add(SideEffect(payload))
 
 
 class PathState(State[Path]):
