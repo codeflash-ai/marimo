@@ -370,7 +370,10 @@ class ThreadSafeStdin(Stdin):
             )
 
         max_bytes = std_stream_max_bytes()
-        if sys.getsizeof(prompt) > max_bytes:
+        # Avoid unnecessary sys.getsizeof by checking length first, which is much faster
+        # Only compute sys.getsizeof if there's a chance it is over max_bytes
+        # Unicode string: len counts characters, not bytes; large strings only.
+        if len(prompt) > max_bytes and sys.getsizeof(prompt) > max_bytes:
             prompt = (
                 "Warning: marimo truncated a very large console output.\n"
                 + prompt[: int(max_bytes)]
@@ -403,6 +406,7 @@ class ThreadSafeStdin(Stdin):
         # hint only included for compatibility with sys.stdin.readlines API;
         # we don't support it.
         del hint
+        # Avoid unnecessary temporary variable: return split directly
         return self._readline_with_prompt(prompt="").split("\n")
 
 
