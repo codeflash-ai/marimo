@@ -48,10 +48,16 @@ def get_engines_from_variables(
 ) -> list[tuple[VariableName, BaseEngine[Any]]]:
     engines: list[tuple[VariableName, BaseEngine[Any]]] = []
 
+    supported_engines = [
+        (sql_engine, sql_engine.is_compatible)
+        for sql_engine in SUPPORTED_ENGINES
+    ]
+    append = engines.append
+
     for variable_name, value in variables:
-        for sql_engine in SUPPORTED_ENGINES:
-            if sql_engine.is_compatible(value):
-                engines.append(
+        for sql_engine, is_compatible in supported_engines:
+            if is_compatible(value):
+                append(
                     (
                         variable_name,
                         sql_engine(
