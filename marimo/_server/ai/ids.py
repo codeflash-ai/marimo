@@ -25,11 +25,11 @@ class AiModelId:
     @staticmethod
     def from_model(model_id: str) -> "AiModelId":
         if "/" not in model_id:
-            LOGGER.warning(
-                f"Invalid model ID: {model_id}. Model ID must be in the format <provider>/<model>"
-            )
             guess = _guess_provider(model_id)
-            LOGGER.warning(f"Guessing provider for {model_id} as {guess}")
+            LOGGER.warning(
+                f"Invalid model ID: {model_id}. Model ID must be in the format <provider>/<model>. "
+                f"Guessing provider for {model_id} as {guess}"
+            )
             return AiModelId(provider=guess, model=ShortModelId(model_id))
 
         provider, short_id = model_id.split("/", 1)

@@ -1188,16 +1188,17 @@ def get_completion_provider(
     config: AnyProviderConfig, model: str
 ) -> CompletionProvider[Any, Any]:
     model_id = AiModelId.from_model(model)
+    provider = model_id.provider
 
-    if model_id.provider == "anthropic":
+    if provider == "anthropic":
         return AnthropicProvider(model_id.model, config)
-    elif model_id.provider == "google":
+    elif provider == "google":
         return GoogleProvider(model_id.model, config)
-    elif model_id.provider == "bedrock":
+    elif provider == "bedrock":
         return BedrockProvider(model_id.model, config)
-    elif model_id.provider == "azure":
+    elif provider == "azure":
         return AzureOpenAIProvider(model_id.model, config)
-    elif model_id.provider == "openrouter":
+    elif provider == "openrouter":
         return OpenAIProvider(model_id.model, config)
     else:
         return OpenAIProvider(model_id.model, config)
