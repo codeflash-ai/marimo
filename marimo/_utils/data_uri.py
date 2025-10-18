@@ -7,7 +7,9 @@ import base64
 def build_data_url(mimetype: str, data: bytes) -> str:
     assert mimetype is not None
     # `data` must be base64 encoded
-    str_repr = data.decode("utf-8").replace("\n", "")
+    str_repr = data.decode("utf-8")
+    if "\n" in str_repr:
+        str_repr = str_repr.replace("\n", "")
     return f"data:{mimetype};base64,{str_repr}"
 
 
