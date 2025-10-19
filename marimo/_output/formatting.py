@@ -222,7 +222,11 @@ class FormattedOutput:
 
     @staticmethod
     def empty() -> FormattedOutput:
-        return FormattedOutput(mimetype="text/plain", data="")
+        if not hasattr(FormattedOutput.empty, "_EMPTY"):
+            FormattedOutput.empty._EMPTY = FormattedOutput(
+                mimetype="text/plain", data=""
+            )
+        return FormattedOutput.empty._EMPTY
 
 
 def try_format(
