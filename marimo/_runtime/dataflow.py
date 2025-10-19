@@ -814,24 +814,26 @@ def import_block_relatives(
     # definitions used to find the descendants of this cell.
     unimported_defs = cell.defs - cell.import_workspace.imported_defs
 
-    children_ids = {
-        child_id
-        for name in unimported_defs
-        for child_id in graph.get_referring_cells(name, language="python")
-    }
+    # Faster: use bulk union rather than repeated calls to graph.get_referring_cells
+    children_ids = set()
+    referring_cells = graph.get_referring_cells
+    for name in unimported_defs:
+        children_ids.update(referring_cells(name, language="python"))
 
     # If children haven't been executed, then still use imported defs;
     # handle an edge case when an import cell is interrupted by an
     # exception or user interrupt, so that a module is imported but the
     # cell's children haven't run.
-    if cell.import_workspace.imported_defs:
+    imported_defs = cell.import_workspace.imported_defs
+    if imported_defs:
         interrupted_states = {"interrupted", "cancelled", "marimo-error", None}
-        children_ids.update(
-            child_id
-            for name in cell.import_workspace.imported_defs
-            for child_id in graph.get_referring_cells(name, language="python")
-            if graph.cells[child_id].run_result_status in interrupted_states
-        )
+        # Precompute status lookup outside inner loop to minimize cell lookups
+        graph_cells = graph.cells
+        for name in imported_defs:
+            for child_id in referring_cells(name, language="python"):
+                run_result_status = graph_cells[child_id].run_result_status
+                if run_result_status in interrupted_states:
+                    children_ids.add(child_id)
 
     return children_ids
 
