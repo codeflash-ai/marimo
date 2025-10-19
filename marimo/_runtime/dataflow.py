@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import asyncio
 import threading
 from collections import deque
 from dataclasses import dataclass, field
@@ -836,6 +837,49 @@ def import_block_relatives(
     return children_ids
 
 
+def _group_cells_by_level(
+    graph: DirectedGraph, cell_ids: Collection[CellId_t]
+):
+    """Group cell_ids into execution levels (generations) according to their dependencies."""
+    parents, children = induced_subgraph(graph, cell_ids)
+    in_degree = {cid: len(parents[cid]) for cid in cell_ids}
+    levels: list[set[CellId_t]] = []
+    # Initial level: all nodes with in_degree == 0
+    current_level = {cid for cid in cell_ids if in_degree[cid] == 0}
+    visited = set(current_level)
+    remaining = set(cell_ids)
+    while current_level:
+        levels.append(current_level)
+        next_level = set()
+        for cid in current_level:
+            for child in children[cid]:
+                if child in visited:
+                    continue
+                in_degree[child] -= 1
+                if in_degree[child] == 0:
+                    next_level.add(child)
+                    visited.add(child)
+        current_level = next_level
+    return levels
+
+
+async def _execute_cells_by_levels_async(
+    graph: DirectedGraph,
+    cell_ids: Collection[CellId_t],
+    executor,
+    glbls: dict[str, Any],
+):
+    """Run cells by level, maximizing concurrency within each level."""
+    levels = _group_cells_by_level(graph, cell_ids)
+    for level in levels:
+        await asyncio.gather(
+            *[
+                executor.execute_cell_async(graph.cells[cid], glbls, graph)
+                for cid in level
+            ]
+        )
+
+
 class Runner:
     """Utility for running individual cells in a graph
 
@@ -919,10 +963,10 @@ class Runner:
         ancestor_ids = self._get_ancestors(cell_impl, kwargs)
 
         glbls: dict[str, Any] = {}
-        for cid in topological_sort(graph, ancestor_ids):
-            await self._executor.execute_cell_async(
-                graph.cells[cid], glbls, graph
-            )
+        # Execute ancestors in topological levels, running independent ancestors concurrently
+        await _execute_cells_by_levels_async(
+            graph, ancestor_ids, self._executor, glbls
+        )
 
         Runner._substitute_refs(cell_impl, glbls, kwargs)
         output = await self._executor.execute_cell_async(
