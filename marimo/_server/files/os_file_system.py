@@ -374,9 +374,10 @@ def natural_sort_file(file: FileInfo) -> list[Union[int, str]]:
 
 
 def _is_terminal_editor(editor: str) -> bool:
+    editor_lower = editor.lower()
     return any(
-        ed in editor.lower()
-        for ed in [
+        ed in editor_lower
+        for ed in (
             "vim",
             "vi",
             "emacs",
@@ -385,7 +386,7 @@ def _is_terminal_editor(editor: str) -> bool:
             "neovim",
             "pico",
             "micro",
-        ]
+        )
     )
 
 
