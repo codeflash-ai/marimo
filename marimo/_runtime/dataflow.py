@@ -741,11 +741,12 @@ def induced_subgraph(
 
     Represents the subgraph induced by `cell_ids`.
     """
+    cell_ids_set = set(cell_ids)
     parents: dict[CellId_t, set[CellId_t]] = {}
     children: dict[CellId_t, set[CellId_t]] = {}
-    for cid in cell_ids:
-        parents[cid] = set(p for p in graph.parents[cid] if p in cell_ids)
-        children[cid] = set(c for c in graph.children[cid] if c in cell_ids)
+    for cid in cell_ids_set:
+        parents[cid] = graph.parents[cid] & cell_ids_set
+        children[cid] = graph.children[cid] & cell_ids_set
     return parents, children
 
 
@@ -754,10 +755,8 @@ def get_cycles(
 ) -> list[tuple[Edge, ...]]:
     """Get all cycles among `cell_ids`."""
     _, induced_children = induced_subgraph(graph, cell_ids)
-    induced_edges = set(
-        [(u, v) for u in induced_children for v in induced_children[u]]
-    )
-    return [c for c in graph.cycles if all(e in induced_edges for e in c)]
+    induced_edges = {(u, v) for u, vs in induced_children.items() for v in vs}
+    return [c for c in graph.cycles if induced_edges.issuperset(c)]
 
 
 def topological_sort(
