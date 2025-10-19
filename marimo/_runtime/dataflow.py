@@ -202,8 +202,9 @@ class DirectedGraph:
             return name
 
         # For SQL hierarchical references, find the matching variable name
+        variable_data = other_cell.variable_data
         for _, matching_variable_name in sql_matches:
-            if matching_variable_name in other_cell.variable_data:
+            if matching_variable_name in variable_data:
                 return matching_variable_name
 
         return name
