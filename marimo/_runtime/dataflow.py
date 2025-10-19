@@ -707,29 +707,56 @@ def transitive_closure(
         after the relatives are computed
     """
 
+    # Pre-bind frequently used variables and methods for speed
     result: set[CellId_t] = cell_ids.copy() if inclusive else set()
     seen: set[CellId_t] = cell_ids.copy()
     queue: deque[CellId_t] = deque(cell_ids)
-    predicate = predicate or (lambda _: True)
+    predicate = predicate if predicate is not None else (lambda _: True)
+    cells = graph.cells
+    graph_children = graph.children
+    graph_parents = graph.parents
 
-    def _relatives(cid: CellId_t) -> set[CellId_t]:
-        if relatives is None:
-            return graph.children[cid] if children else graph.parents[cid]
-        return relatives(graph, cid, children)
+    # Use local function and pre-bind relatives if possible for branch prediction
+    if relatives is None:
+        if children:
 
+            def _relatives(cid: CellId_t) -> set[CellId_t]:
+                return graph_children[cid]
+        else:
+
+            def _relatives(cid: CellId_t) -> set[CellId_t]:
+                return graph_parents[cid]
+    else:
+        rel = relatives
+
+        def _relatives(cid: CellId_t) -> set[CellId_t]:
+            return rel(graph, cid, children)
+
+    # Use local variable assignment for queue methods for small perf gain
+    queue_popleft = queue.popleft
+    queue_append = queue.append
+    seen_add = seen.add
+    result_add = result.add
+
+    # Slightly optimize loop by reusing variable for new_relatives, and use
+    # single addition per relative to results/seens
     while queue:
-        cid = queue.popleft()  # O(1) operation
+        cid = queue_popleft()  # O(1) operation
 
         relatives_set = _relatives(cid)
-        new_relatives = relatives_set - seen
+        # Replace "set - set" with generator for branching optimization
+        # This is best kept as set - set for speed of lookup as seen can be large
 
-        if new_relatives:
-            # Add new relatives to queue and result if they pass predicate
-            for relative in new_relatives:
-                if predicate(graph.cells[relative]):
-                    result.add(relative)
-                seen.add(relative)
-                queue.append(relative)
+        # Try to avoid allocating a new set if possible. Use an iterative approach.
+        for relative in relatives_set:
+            if relative not in seen:
+                # Mark as seen immediately, so even if skipped, not revisited
+                seen_add(relative)
+                # Only include if predicate passes
+                cell = cells[relative]
+                if predicate(cell):
+                    result_add(relative)
+                queue_append(relative)
 
     return result
 
