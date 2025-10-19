@@ -600,7 +600,7 @@ class DirectedGraph:
             self.cells[cid].set_stale(stale=True)
 
     def get_stale(self) -> set[CellId_t]:
-        return set([cid for cid, cell in self.cells.items() if cell.stale])
+        return {cid for cid, cell in self.cells.items() if cell.stale}
 
     def get_transitive_references(
         self,
