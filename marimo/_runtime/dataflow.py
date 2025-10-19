@@ -741,11 +741,16 @@ def induced_subgraph(
 
     Represents the subgraph induced by `cell_ids`.
     """
+    cell_ids_set = set(cell_ids)
     parents: dict[CellId_t, set[CellId_t]] = {}
     children: dict[CellId_t, set[CellId_t]] = {}
-    for cid in cell_ids:
-        parents[cid] = set(p for p in graph.parents[cid] if p in cell_ids)
-        children[cid] = set(c for c in graph.children[cid] if c in cell_ids)
+
+    gp = graph.parents
+    gc = graph.children
+    # Loop fusion, direct set intersection for speed
+    for cid in cell_ids_set:
+        parents[cid] = gp[cid] & cell_ids_set
+        children[cid] = gc[cid] & cell_ids_set
     return parents, children
 
 
@@ -774,26 +779,38 @@ def topological_sort(
     registration_order = list(graph.cells.keys())
     top_down_keys = {key: idx for idx, key in enumerate(registration_order)}
 
-    # Build adjacency lists and in-degree counts
-    parents, children = induced_subgraph(graph, cell_ids)
-    in_degree = {cid: len(parents[cid]) for cid in cell_ids}
+    cell_ids_set = set(cell_ids)
 
-    # Initialize heap with roots
-    heap = [
-        (top_down_keys[cid], cid) for cid in cell_ids if in_degree[cid] == 0
-    ]
+    # Fast induced_subgraph with set cell_ids
+    parents, children = induced_subgraph(graph, cell_ids_set)
+    # Dict comprehension optimized to share allocation
+    in_degree = {}
+    heap = []
+    for cid in cell_ids_set:
+        deg = len(parents[cid])
+        in_degree[cid] = deg
+        if deg == 0:
+            heap.append((top_down_keys[cid], cid))
+
     heapify(heap)
 
     sorted_cell_ids: list[CellId_t] = []
-    while heap:
-        _, cid = heappop(heap)
-        sorted_cell_ids.append(cid)
+    append = sorted_cell_ids.append
+    heappush_ = heappush  # local var optimization
+    heappop_ = heappop  # local var optimization
 
-        # Process children
-        for child in children[cid]:
-            in_degree[child] -= 1
-            if in_degree[child] == 0:
-                heappush(heap, (top_down_keys[child], child))
+    # Localize lookups for tight loop
+    in_deg = in_degree
+    top_keys = top_down_keys
+    ch = children
+    while heap:
+        _, cid = heappop_(heap)
+        append(cid)
+
+        for child in ch[cid]:
+            in_deg[child] -= 1
+            if in_deg[child] == 0:
+                heappush_(heap, (top_keys[child], child))
 
     return sorted_cell_ids
 
