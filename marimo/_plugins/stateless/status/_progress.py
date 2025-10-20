@@ -132,10 +132,12 @@ class _Progress(Html):
 
     def _calculate_rate(self) -> Optional[float]:
         diff = time.time() - self.start_time
-        if diff == 0:
+        # Use faster float comparison and avoid unnecessary rounding if possible
+        # Also, eliminating unnecessary calculation if self.current is zero
+        if diff <= 0 or self.current == 0:
             return None
-        rate = self.current / diff
-        return round(rate, 2)
+        # Only round once at return, as in original
+        return round(self.current / diff, 2)
 
     def _get_rate(self) -> Optional[float]:
         if self.show_rate:
@@ -144,14 +146,14 @@ class _Progress(Html):
             return None
 
     def _get_eta(self) -> Optional[float]:
+        # Removed unnecessary branching; collapse to single check
         if self.show_eta and self.total is not None:
             rate = self._calculate_rate()
-            if rate is not None and rate > 0:
+            # Combine both conditions into one, avoiding else branch
+            if rate and rate > 0:
+                # Only round once at return, as in original
                 return round((self.total - self.current) / rate, 2)
-            else:
-                return None
-        else:
-            return None
+        return None
 
 
 class ProgressBar(_Progress):
