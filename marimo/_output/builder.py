@@ -103,25 +103,34 @@ class _HTMLBuilder:
         frameborder: Optional[str] = "0",
         **kwargs: str,
     ) -> str:
-        params: list[tuple[str, Union[str, None]]] = []
-        if src:
-            params.append(("src", src))
-        if srcdoc:
-            params.append(("srcdoc", srcdoc))
-        if width:
-            params.append(("width", width))
-        if height:
-            params.append(("height", height))
-        if style:
-            params.append(("style", style))
-        if onload:
-            params.append(("onload", onload))
-        if frameborder:
-            params.append(("frameborder", frameborder))
-        for key, value in kwargs.items():
-            params.append((key, value))
+        # Preallocate the list of possible parameters (up to number of static + dynamic params)
+        static_params_count = (
+            7  # src, srcdoc, width, height, style, onload, frameborder
+        )
+        params_length = static_params_count + len(kwargs)
+        params: list[tuple[str, Union[str, None]]] = []  # type: ignore
 
-        if len(params) == 0:
+        append = params.append  # local var for performance
+
+        if src is not None and src != "":
+            append(("src", src))
+        if srcdoc is not None and srcdoc != "":
+            append(("srcdoc", srcdoc))
+        if width is not None and width != "":
+            append(("width", width))
+        if height is not None and height != "":
+            append(("height", height))
+        if style is not None and style != "":
+            append(("style", style))
+        if onload is not None and onload != "":
+            append(("onload", onload))
+        if frameborder is not None and frameborder != "":
+            append(("frameborder", frameborder))
+        # All kwargs included, regardless of None or empty
+        if kwargs:
+            params.extend(kwargs.items())
+
+        if not params:
             return "<iframe></iframe>"
         else:
             return f"<iframe {_join_params(params)}></iframe>"
@@ -303,10 +312,12 @@ class _HTMLBuilder:
 
 
 def _join_params(params: list[tuple[str, Union[str, None]]]) -> str:
-    # Filter None
-    params = [(k, v) for k, v in params if v is not None]
-
-    return " ".join([f"{k}='{v}'" if v != "" else f"{k}" for k, v in params])
+    # Avoid extra list construction where possible, just build fragments in a generator expression
+    return " ".join(
+        f"{k}='{v}'" if v is not None and v != "" else f"{k}"
+        for k, v in params
+        if v is not None
+    )
 
 
 h = _HTMLBuilder()
