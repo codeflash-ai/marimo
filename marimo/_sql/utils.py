@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 from marimo import _loggers
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
     from polars._typing import ConnectionOrCursor
+
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", flags=re.DOTALL)
 
 LOGGER = _loggers.marimo_logger()
 
@@ -203,25 +206,20 @@ def is_query_empty(query: str) -> bool:
 
     # If the query starts with -- or /*, it's likely just comments
     if stripped.startswith("--") or stripped.startswith("/*"):
-        import re
-
-        # Remove /* */ comments
-        no_block_comments = re.sub(r"/\*.*?\*/", "", query, flags=re.DOTALL)
+        # Remove /* */ comments using precompiled pattern
+        no_block_comments = _BLOCK_COMMENT_RE.sub("", query)
 
         # Remove -- comments (just split on \n and check each line)
-        lines = no_block_comments.split("\n")
-        for line in lines:
-            # Find first non-whitespace character
-            for char in line:
-                if char.isspace():
-                    continue
-                elif char == "-":
-                    if line.strip().startswith("--"):
-                        break  # This line is a comment, continue to next line
-                    else:
-                        return False  # Found non-comment content
-                else:
-                    return False  # Found non-comment content
+        # Use generator to quickly find the first non-comment line
+        for line in no_block_comments.split("\n"):
+            # Search for first non-whitespace character without per-char iteration
+            sline = line.lstrip()
+            if not sline:
+                continue  # blank line, ignore
+            elif sline.startswith("--"):
+                continue  # comment line, ignore
+            else:
+                return False  # Found non-comment content
         return True
 
     # If it doesn't start with comment markers, it's not empty
