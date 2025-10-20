@@ -22,12 +22,14 @@ class BlockException(Exception):
 
 
 def compiled_ast(block: Sequence[ast.AST | ast.stmt]) -> ast.Module:
+    # Fast path: avoid unnecessary cast to list if already a list
+    stmts = block if isinstance(block, list) else list(block)
+    module = ast.Module(stmts, type_ignores=[])
+    # Directly return the compile output with cast, as in original
     return cast(
         ast.Module,
         compile(
-            ast.Module(cast(list[ast.stmt], block), type_ignores=[]),
-            # <ast> is non-standard as a filename, but easier to debug than
-            # <module> everywhere.
+            module,
             "<ast>",
             mode="exec",
             flags=ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,
