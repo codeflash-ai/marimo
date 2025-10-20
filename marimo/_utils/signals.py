@@ -4,6 +4,12 @@ from __future__ import annotations
 import signal
 from typing import Any
 
+_SIGTERM = signal.SIGTERM
+
+_SIGINT = signal.SIGINT
+
+_getsignal = signal.getsignal
+
 
 def restore_signals() -> None:
     # Restore the system default signal handlers.
@@ -21,6 +27,6 @@ def restore_signals() -> None:
 
 def get_signals() -> dict[int, Any]:
     return {
-        signal.SIGTERM: signal.getsignal(signal.SIGTERM),
-        signal.SIGINT: signal.getsignal(signal.SIGINT),
+        _SIGTERM: _getsignal(_SIGTERM),
+        _SIGINT: _getsignal(_SIGINT),
     }
