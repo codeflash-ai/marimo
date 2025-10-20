@@ -128,14 +128,11 @@ class _HTMLBuilder:
 
     @staticmethod
     def pre(child: str, style: Optional[str] = None) -> str:
-        params: list[tuple[str, Union[str, None]]] = []
-        if style is not None:
-            params.append(("style", style))
-
-        if not params:
+        if style is None:
             return f"<pre>{child}</pre>"
-        else:
-            return f"<pre {_join_params(params)}>{child}</pre>"
+        if style == "":
+            return f"<pre style>{child}</pre>"
+        return f"<pre style='{style}'>{child}</pre>"
 
     @staticmethod
     def component(
