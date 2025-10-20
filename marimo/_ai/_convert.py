@@ -317,28 +317,26 @@ def convert_to_groq_messages(
 ) -> list[dict[Any, Any]]:
     groq_messages: list[dict[Any, Any]] = []
 
+    # Pre-allocate variable outside the loop for better performance
+    append_msg = groq_messages.append
+
     for message in messages:
         if message.parts:
             # Currently only supports text content (Llava is deprecated now)
             # See here - https://console.groq.com/docs/deprecations
-            file_parts = [
-                part for part in message.parts if isinstance(part, FilePart)
-            ]
-            # Convert attachments to text if possible
+            # Inline file_parts generation for less overhead and faster membership checks
             text_content = str(message.content)  # Explicitly convert to string
-            for file in file_parts:
-                if file.media_type.startswith("text"):
-                    text_content += "\n" + _extract_text(file.url)
-                else:
-                    raise ValueError(
-                        f"Unsupported content type {file.media_type}. Only text content is supported."
-                    )
-
-            groq_messages.append(
-                {"role": message.role, "content": text_content}
-            )
+            for part in message.parts:
+                if isinstance(part, FilePart):
+                    if part.media_type.startswith("text"):
+                        text_content += "\n" + _extract_text(part.url)
+                    else:
+                        raise ValueError(
+                            f"Unsupported content type {part.media_type}. Only text content is supported."
+                        )
+            append_msg({"role": message.role, "content": text_content})
         else:
-            groq_messages.append(
+            append_msg(
                 {
                     "role": message.role,
                     "content": str(
@@ -446,9 +444,9 @@ def convert_to_google_messages(
 
 
 def _extract_text(url: str) -> str:
+    # Fast-path: use partition instead of split for data extraction (avoids scanning full string multiple times)
     if url.startswith("data:"):
-        # extract base64 encoding from url
-        data = url.split(",")[1]
+        _, _, data = url.partition(",")
         raw = base64.b64decode(data)
         try:
             return raw.decode("utf-8")
