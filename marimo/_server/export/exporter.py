@@ -5,6 +5,7 @@ import asyncio
 import base64
 import io
 import mimetypes
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import (
@@ -66,6 +67,8 @@ ROOT = (marimo_package_path() / "_static").resolve()
 
 if TYPE_CHECKING:
     from nbformat.notebooknode import NotebookNode  # type: ignore
+
+INDEX_HTML_PATH = Path(ROOT) / "index.html"
 
 
 class Exporter:
@@ -567,7 +570,11 @@ def _create_notebook_cell(
 
 def get_html_contents() -> str:
     if GLOBAL_SETTINGS.DEVELOPMENT_MODE:
-        import marimo._utils.requests as requests
+        # Optimize repeated import by checking sys.modules
+        if "marimo._utils.requests" in sys.modules:
+            requests = sys.modules["marimo._utils.requests"]
+        else:
+            import marimo._utils.requests as requests
 
         # Fetch from a CDN
         LOGGER.info(
@@ -576,8 +583,7 @@ def get_html_contents() -> str:
         url = f"https://cdn.jsdelivr.net/npm/@marimo-team/frontend@{__version__}/dist/index.html"
         return requests.get(url).text()
 
-    index_html = Path(ROOT) / "index.html"
-    return index_html.read_text(encoding="utf-8")
+    return INDEX_HTML_PATH.read_text(encoding="utf-8")
 
 
 def _convert_marimo_output_to_ipynb(
