@@ -1,6 +1,7 @@
 # Copyright 2025 Marimo. All rights reserved.
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from marimo._ast.errors import ImportStarError
@@ -10,6 +11,8 @@ from marimo._lint.rules.base import LintRule
 if TYPE_CHECKING:
     from marimo._lint.context import RuleContext
     from marimo._schemas.serialization import CellDef
+
+_LINE_PATTERN = re.compile(r"line (\d+)")
 
 IMPORT_STAR_ERROR_MESSAGE = (
     "Importing symbols with `import *` is not allowed in marimo."
@@ -129,14 +132,12 @@ def _handle_import_star_error(
     e: ImportStarError, cell: CellDef
 ) -> tuple[int, int]:
     """Handle ImportStarError and extract correct line number and clean message."""
-    import re
-
     message_str = str(e)
     # The message format is "line {lineno} SyntaxError: ..." Extract the
     # relative line number and compute actual line
     actual_line = None
     if "..." not in message_str:
-        line_match = re.match(r"line (\d+)", message_str)
+        line_match = _LINE_PATTERN.match(message_str)
         if line_match:
             relative_line = int(line_match.group(1))
             actual_line = cell.lineno + relative_line - 1
@@ -146,7 +147,9 @@ def _handle_import_star_error(
         star_index = cell.code.find("*")
         if star_index != -1:
             # Count newlines before the star to get the line number
-            actual_line += cell.code[:star_index].count("\n")
+            # Use a local variable for slice to avoid repeated slicing
+            before_star = cell.code[:star_index]
+            actual_line += before_star.count("\n")
 
     # Clean message without "SyntaxError:" prefix
     column = getattr(e, "offset", 1) or 1
