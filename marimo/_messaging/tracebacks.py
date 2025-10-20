@@ -15,9 +15,13 @@ def _highlight_traceback(traceback: str) -> str:
     from pygments.formatters import HtmlFormatter
     from pygments.lexers import PythonTracebackLexer
 
-    formatter = HtmlFormatter()
+    if not hasattr(_highlight_traceback, "_formatter"):
+        _highlight_traceback._formatter = HtmlFormatter()
+        _highlight_traceback._lexer = PythonTracebackLexer()
 
-    body = highlight(traceback, PythonTracebackLexer(), formatter)
+    formatter = _highlight_traceback._formatter
+
+    body = highlight(traceback, _highlight_traceback._lexer, formatter)
     return f'<span class="codehilite">{body}</span>'
 
 
