@@ -142,12 +142,20 @@ class _HTMLBuilder:
         component_name: str,
         params: list[tuple[str, Union[str, None]]],
     ) -> str:
-        if len(params) == 0:
+        if not params:
             return f"<{component_name}></{component_name}>"
         else:
-            return (
-                f"<{component_name} {_join_params(params)}></{component_name}>"
-            )
+            # Inline _join_params for perf; avoids func call
+            parts = []
+            for k, v in params:
+                if v is not None:
+                    if v != "":
+                        parts.append(f"{k}='{v}'")
+                    else:
+                        parts.append(f"{k}")
+            # Compose once to reduce temp str allocations
+            params_str = " ".join(parts)
+            return f"<{component_name} {params_str}></{component_name}>"
 
     @staticmethod
     def figure(
