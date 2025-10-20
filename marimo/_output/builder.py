@@ -191,20 +191,15 @@ class _HTMLBuilder:
     def h3(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
-            return f"<h3>{children_html}</h3>"
+        if isinstance(children, str):
+            children_html = children
         else:
-            return f"<h3 {_join_params(params)}>{children_html}</h3>"
+            children_html = "".join(children)
+
+        if style:
+            return f"<h3 style='{style}'>{children_html}</h3>"
+        else:
+            return f"<h3>{children_html}</h3>"
 
     @staticmethod
     def span(
