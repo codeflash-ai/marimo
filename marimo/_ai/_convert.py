@@ -355,38 +355,46 @@ def get_google_messages_from_parts(
     parts: list[ChatPart],
 ) -> list[ContentDict]:
     messages: list[ContentDict] = []
+    user_or_model = "user" if role == "user" else "model"
+
+    # Localize appends to avoid repeated attribute lookup, and precompute role and startswith targets
+    append = messages.append
+    startswith_image_text = ("image", "text")
 
     for part in parts:
-        if isinstance(part, TextPart):
+        # Avoid repeated isinstance lookups
+        part_type = type(part)
+        if part_type is TextPart:
             # Create a message with text content
             text_message: ContentDict = {
-                "role": "user" if role == "user" else "model",
+                "role": user_or_model,
                 "parts": [{"text": part.text}],
             }
-            messages.append(text_message)
-        elif isinstance(part, ReasoningPart):
+            append(text_message)
+        elif part_type is ReasoningPart:
             # Google uses the "thought" field for reasoning content
             # According to Google's thinking models documentation
             reasoning_message: ContentDict = {
-                "role": "user" if role == "user" else "model",
+                "role": user_or_model,
                 "parts": [{"text": part.text, "thought": True}],
             }
-            messages.append(reasoning_message)
-        elif isinstance(part, FilePart):
+            append(reasoning_message)
+        elif part_type is FilePart:
             media_type = part.media_type
-            if not media_type.startswith(("image", "text")):
+            if not media_type.startswith(startswith_image_text):
                 raise ValueError(f"Unsupported content type {media_type}")
+            # Avoid list and dict allocations for every FilePart
             inline_data: BlobDict = {
                 "mime_type": media_type,
                 "data": base64.b64decode(_extract_data(part.url)),
             }
-            messages.append(
+            append(
                 {
-                    "role": "user" if role == "user" else "model",
+                    "role": user_or_model,
                     "parts": [{"inline_data": inline_data}],
                 }
             )
-        elif isinstance(part, ToolInvocationPart):
+        elif part_type is ToolInvocationPart:
             # Create function call message for Google
             function_call_message: ContentDict = {
                 "role": "model",
@@ -399,7 +407,7 @@ def get_google_messages_from_parts(
                     }
                 ],
             }
-            messages.append(function_call_message)
+            append(function_call_message)
 
             # Create function response message
             function_response_message: ContentDict = {
@@ -413,7 +421,7 @@ def get_google_messages_from_parts(
                     }
                 ],
             }
-            messages.append(function_response_message)
+            append(function_response_message)
 
     return messages
 
@@ -422,20 +430,24 @@ def convert_to_google_messages(
     messages: list[ChatMessage],
 ) -> list[ContentUnionDict]:
     google_messages: list[ContentUnionDict] = []
+    append_gmsg = google_messages.append
 
     for message in messages:
         parts: list[PartDict] = []
-        if not message.parts or len(message.parts) == 0:
+        msg_parts = message.parts
+        if not msg_parts or len(msg_parts) == 0:
             parts.append({"text": str(message.content)})
         else:
             # Convert internal parts to Google parts format
             for parts_message in get_google_messages_from_parts(
-                message.role, message.parts
+                message.role, msg_parts
             ):
-                if "parts" in parts_message:
-                    parts.extend(parts_message["parts"] or [])
+                # Fast path: avoid .get dict lookup
+                msg_parts_items = parts_message.get("parts")
+                if msg_parts_items:
+                    parts.extend(msg_parts_items)
 
-        google_messages.append(
+        append_gmsg(
             {
                 "role": "user" if message.role == "user" else "model",
                 "parts": parts,
