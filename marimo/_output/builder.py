@@ -153,20 +153,16 @@ class _HTMLBuilder:
     def figure(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
-            return f"<figure>{children_html}</figure>"
+        if isinstance(children, str):
+            children_html = children
         else:
+            children_html = "".join(children)
+
+        if style:
+            params = [("style", style)]
             return f"<figure {_join_params(params)}>{children_html}</figure>"
+        else:
+            return f"<figure>{children_html}</figure>"
 
     @staticmethod
     def figcaption(
@@ -303,10 +299,14 @@ class _HTMLBuilder:
 
 
 def _join_params(params: list[tuple[str, Union[str, None]]]) -> str:
-    # Filter None
-    params = [(k, v) for k, v in params if v is not None]
-
-    return " ".join([f"{k}='{v}'" if v != "" else f"{k}" for k, v in params])
+    parts = []
+    for k, v in params:
+        if v is not None:
+            if v != "":
+                parts.append(f"{k}='{v}'")
+            else:
+                parts.append(f"{k}")
+    return " ".join(parts)
 
 
 h = _HTMLBuilder()
