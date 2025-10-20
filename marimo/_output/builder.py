@@ -172,20 +172,19 @@ class _HTMLBuilder:
     def figcaption(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
-            return f"<figcaption>{children_html}</figcaption>"
+        # Inline children normalization and join, avoids creating intermediate resolved_children list
+        if isinstance(children, str):
+            children_html = children
         else:
-            return f"<figcaption {_join_params(params)}>{children_html}</figcaption>"
+            children_html = "".join(children)
+
+        # Fast path: no style, avoid creating a params list and function call
+        if not style:
+            return f"<figcaption>{children_html}</figcaption>"
+
+        # Single param, bypass list creation and function call for _join_params
+        # Direct formatting is measurably faster than generic join for a single attribute
+        return f"<figcaption style='{style}'>{children_html}</figcaption>"
 
     @staticmethod
     def h3(
