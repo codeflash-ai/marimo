@@ -135,6 +135,7 @@ class CommentPreserver:
 
         # Apply comments to transformed lines
         result_lines = transformed_lines.copy()
+        result_lines_set = set(result_lines)
 
         for line_num, line_comments in comments_by_line.items():
             target_line_idx = min(
@@ -171,7 +172,10 @@ class CommentPreserver:
                         result_lines[target_line_idx] = (
                             current_line.rstrip() + "  " + comment_text
                         )
-                elif target_line_idx >= 0 and comment_text not in result_lines:
+                elif (
+                    target_line_idx >= 0
+                    and comment_text not in result_lines_set
+                ):
                     # Standalone comment - insert above the line if not already present
                     result_lines.insert(target_line_idx, comment_text)
 
