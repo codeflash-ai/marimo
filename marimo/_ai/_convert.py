@@ -203,7 +203,6 @@ def convert_to_anthropic_messages(
         )
 
         if not message.parts:
-            # Convert content to string
             text_block: TextBlockParam = {
                 "type": "text",
                 "text": str(message.content),
@@ -214,39 +213,56 @@ def convert_to_anthropic_messages(
             continue
 
         current_parts: list[AnthropicParts] = []
-        data_reasoning_parts = [
-            part
-            for part in message.parts
-            if isinstance(part, DataReasoningPart)
-        ]
+
+        # Optimize DataReasoningPart handling:
+        # Create a list only if ReasoningPart is present
+        has_reasoningpart = False
+        for part in message.parts:
+            if isinstance(part, ReasoningPart):
+                has_reasoningpart = True
+                break
+        data_reasoning_parts = (
+            [
+                part
+                for part in message.parts
+                if isinstance(part, DataReasoningPart)
+            ]
+            if has_reasoningpart
+            else []
+        )
+        data_reasoning_idx = 0  # Use as iterator to avoid pop(0) overhead
 
         for part in message.parts:
             if isinstance(part, TextPart):
-                text_part: TextBlockParam = {
-                    "type": "text",
-                    "text": part.text,
-                }
-                current_parts.append(text_part)
+                current_parts.append(
+                    {
+                        "type": "text",
+                        "text": part.text,
+                    }
+                )
             elif isinstance(part, ReasoningPart):
                 signature = ""
+                # Check if details exist and is non-empty
                 if part.details and len(part.details) > 0:
                     signature = part.details[0].signature or ""
 
                 # Use the first data reasoning part if there is no signature
-                # And remove it from the list
-                # We can optimize this
-                if not signature and data_reasoning_parts:
-                    signature = data_reasoning_parts[0].data.signature
-                    data_reasoning_parts.pop(0)
+                if not signature and data_reasoning_idx < len(
+                    data_reasoning_parts
+                ):
+                    signature = data_reasoning_parts[
+                        data_reasoning_idx
+                    ].data.signature
+                    data_reasoning_idx += 1
 
-                thinking_message: ThinkingBlockParam = {
-                    "type": "thinking",
-                    "thinking": part.text,
-                    "signature": signature,
-                }
-                current_parts.append(thinking_message)
+                current_parts.append(
+                    {
+                        "type": "thinking",
+                        "thinking": part.text,
+                        "signature": signature,
+                    }
+                )
             elif isinstance(part, ToolInvocationPart):
-                # For ToolInvocationPart, we need to create separate messages for tool use and tool result
                 tool_use_block: ToolUseBlockParam = {
                     "type": "tool_use",
                     "id": part.tool_call_id,
@@ -254,13 +270,11 @@ def convert_to_anthropic_messages(
                     "input": part.input,
                 }
 
-                # Add the tool use to an assistant message
                 assistant_message_parts = current_parts + [tool_use_block]
                 anthropic_messages.append(
                     {"role": "assistant", "content": assistant_message_parts}
                 )
 
-                # Then create the tool result as a user message
                 tool_result_message: ToolResultBlockParam = {
                     "tool_use_id": part.tool_call_id,
                     "type": "tool_result",
@@ -275,17 +289,15 @@ def convert_to_anthropic_messages(
                     {"role": "user", "content": [tool_result_message]}
                 )
 
-                # Reset parts since we've added the messages
                 current_parts = []
             elif isinstance(part, FilePart):
                 media_type = part.media_type.lstrip()
-                # Only these types are supported by Anthropic
-                if media_type in [
+                if media_type in (
                     "image/jpeg",
                     "image/png",
                     "image/gif",
                     "image/webp",
-                ]:
+                ):
                     file_block: ImageBlockParam = {
                         "type": "image",
                         "source": {
@@ -448,12 +460,14 @@ def convert_to_google_messages(
 def _extract_text(url: str) -> str:
     if url.startswith("data:"):
         # extract base64 encoding from url
-        data = url.split(",")[1]
+        try:
+            data = url.split(",", 1)[1]
+        except IndexError:
+            return ""
         raw = base64.b64decode(data)
         try:
             return raw.decode("utf-8")
         except UnicodeDecodeError:
-            # fallback: try latin1
             return raw.decode("latin1")
     else:
         return url
@@ -461,7 +475,11 @@ def _extract_text(url: str) -> str:
 
 def _extract_data(url: str) -> str:
     if url.startswith("data:"):
-        return url.split(",")[1]
+        # Only split once, more efficient
+        try:
+            return url.split(",", 1)[1]
+        except IndexError:
+            return ""
     else:
         return url
 
