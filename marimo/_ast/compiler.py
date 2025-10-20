@@ -123,32 +123,38 @@ def fix_source_position(node: Any, source_position: SourcePosition) -> Any:
     # for reference.
     line_offset = source_position.lineno
     col_offset = source_position.col_offset
-    for child in ast.walk(node):
+
+    # Cache attributes lookup to avoid repeated lookups per node,
+    # and use local variables for often-used names to reduce global lookup cost.
+    TypeIgnore = ast.TypeIgnore
+    _walk = ast.walk
+
+    for child in _walk(node):
+        child_attrs = getattr(child, "_attributes", ())
+
         # TypeIgnore is a special case where lineno is not an attribute
         # but rather a field of the node itself.
         # Note, TypeIgnore does not have a "col_offset"
-        if isinstance(child, ast.TypeIgnore):
+        if isinstance(child, TypeIgnore):
             child.lineno = getattr(child, "lineno", 0) + line_offset
             continue
 
-        if "lineno" in child._attributes:
+        if "lineno" in child_attrs:
             child.lineno = getattr(child, "lineno", 0) + line_offset  # type: ignore[attr-defined]
 
-        if "col_offset" in child._attributes:
+        if "col_offset" in child_attrs:
             child.col_offset = getattr(child, "col_offset", 0) + col_offset  # type: ignore[attr-defined]
 
-        if (
-            "end_lineno" in child._attributes
-            and (end_lineno := getattr(child, "end_lineno", 0)) is not None
-        ):
-            child.end_lineno = end_lineno + line_offset  # type: ignore[attr-defined]
+        if "end_lineno" in child_attrs:
+            end_lineno = getattr(child, "end_lineno", 0)
+            if end_lineno is not None:
+                child.end_lineno = end_lineno + line_offset  # type: ignore[attr-defined]
 
-        if (
-            "end_col_offset" in child._attributes
-            and (end_col_offset := getattr(child, "end_col_offset", 0))
-            is not None
-        ):
-            child.end_col_offset = end_col_offset + col_offset  # type: ignore[attr-defined]
+        if "end_col_offset" in child_attrs:
+            end_col_offset = getattr(child, "end_col_offset", 0)
+            if end_col_offset is not None:
+                child.end_col_offset = end_col_offset + col_offset  # type: ignore[attr-defined]
+
     return node
 
 
