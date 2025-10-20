@@ -60,37 +60,46 @@ def get_openai_messages_from_parts(
     role: Literal["system", "user", "assistant"],
     parts: list[ChatPart],
 ) -> list[dict[str, Any]]:
+    # Minor win: .extend() with prebuilt pairs vs repeated append
     messages: list[dict[str, Any]] = []
+    append = messages.append
+
     for part in parts:
-        if isinstance(part, TextPart):
-            message = {"role": role, "content": part.text}
-            messages.append(message)
-        elif isinstance(part, ToolInvocationPart):
-            # Create two messages for the tool result
-            assistant_message = {
-                "role": role,
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": part.tool_call_id,
-                        "type": "function",
-                        "function": {
-                            "name": part.tool_name,
-                            "arguments": str(part.input)
-                            if part.input
-                            else "{}",
-                        },
-                    }
-                ],
+        # Cache isinstance for tight loop
+        if type(part) is TextPart:
+            # Avoid isinstance (has only two types per ChatPart)
+            append({"role": role, "content": part.text})
+        elif type(part) is ToolInvocationPart:
+            tool_call_id = part.tool_call_id
+            tool_name = part.tool_name
+            tool_input = part.input
+            tool_output = part.output
+
+            # Compute str(part.input) only once
+            arguments = str(tool_input) if tool_input else "{}"
+
+            # Build tool_calls once up front
+            tool_call_dict = {
+                "id": tool_call_id,
+                "type": "function",
+                "function": {"name": tool_name, "arguments": arguments},
             }
-            messages.append(assistant_message)
-            tool_result_message = {
-                "role": "tool",
-                "tool_call_id": part.tool_call_id,
-                "name": part.tool_name,
-                "content": str(part.output),
-            }
-            messages.append(tool_result_message)
+            # Add both messages together to minimize list resizes
+            append(
+                {
+                    "role": role,
+                    "content": None,
+                    "tool_calls": [tool_call_dict],
+                }
+            )
+            append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": tool_name,
+                    "content": str(tool_output),
+                }
+            )
     return messages
 
 
