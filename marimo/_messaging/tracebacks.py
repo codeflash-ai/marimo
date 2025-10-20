@@ -36,16 +36,29 @@ def _trim_traceback(traceback: str) -> str:
     Skip first DefaultExecutor.execute_cell traceback item which all traces start with.
     """
 
-    lines = traceback.split("\n")
+    newline = "\n"
+    first = traceback.find(newline)
+    if first == -1:
+        return traceback
+    second = traceback.find(newline, first + 1)
+    if second == -1:
+        return traceback
+
+    line0 = traceback[:first]
+    line1 = traceback[first + 1 : second]
     if (
-        len(lines) > 2
-        and lines[0] == "Traceback (most recent call last):"
-        and '/marimo/_runtime/executor.py", line ' in lines[1]
-        and lines[1].endswith(", in execute_cell")
+        line0 == "Traceback (most recent call last):"
+        and '/marimo/_runtime/executor.py", line ' in line1
+        and line1.endswith(", in execute_cell")
     ):
-        for i in range(2, len(lines)):
-            if lines[i].startswith("  File "):
-                return "\n".join(lines[:1] + lines[i:])
+        i = second + 1
+        while True:
+            next_nl = traceback.find(newline, i)
+            if next_nl == -1:
+                break
+            if traceback.startswith("  File ", i):
+                return line0 + newline + traceback[i:]
+            i = next_nl + 1
 
     return traceback
 
