@@ -160,22 +160,26 @@ def raise_df_import_error(pkg: str) -> None:
 def sql_type_to_data_type(type_str: str) -> DataType:
     """Convert SQL type string to DataType"""
     type_str = type_str.lower()
-    if any(x in type_str for x in ("int", "serial")):
+    if "int" in type_str or "serial" in type_str:
         return "integer"
-    elif any(x in type_str for x in ("float", "double", "decimal", "numeric")):
+    if (
+        "float" in type_str
+        or "double" in type_str
+        or "decimal" in type_str
+        or "numeric" in type_str
+    ):
         return "number"
-    elif any(x in type_str for x in ("timestamp", "datetime")):
+    if "timestamp" in type_str or "datetime" in type_str:
         return "datetime"
-    elif "date" in type_str:
+    if "date" in type_str:
         return "date"
-    elif "time" in type_str:
+    if "time" in type_str:
         return "time"
-    elif "bool" in type_str:
+    if "bool" in type_str:
         return "boolean"
-    elif any(x in type_str for x in ("char", "text")):
+    if "char" in type_str or "text" in type_str:
         return "string"
-    else:
-        return "string"
+    return "string"
 
 
 def is_explain_query(query: str) -> bool:
