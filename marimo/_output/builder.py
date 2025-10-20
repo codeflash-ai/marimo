@@ -267,20 +267,18 @@ class _HTMLBuilder:
     def tr(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
+        # Fast membership test and avoid unnecessary list creation
+        if isinstance(children, str):
+            children_html = children
+        else:
+            # Single pass for string joining
+            children_html = "".join(children)
 
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
+        # Avoid list/tuple ops and pass params as needed
+        if not style:
             return f"<tr>{children_html}</tr>"
         else:
-            return f"<tr {_join_params(params)}>{children_html}</tr>"
+            return f"<tr style='{style}'>{children_html}</tr>"
 
     @staticmethod
     def td(
