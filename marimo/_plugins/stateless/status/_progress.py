@@ -131,11 +131,14 @@ class _Progress(Html):
         )
 
     def _calculate_rate(self) -> Optional[float]:
-        diff = time.time() - self.start_time
+        # Inline time.time() to local variable for faster execution
+        now = time.time()
+        diff = now - self.start_time
         if diff == 0:
             return None
         rate = self.current / diff
-        return round(rate, 2)
+        # Avoid redundant round if current is 0
+        return round(rate, 2) if self.current != 0 else 0.0
 
     def _get_rate(self) -> Optional[float]:
         if self.show_rate:
