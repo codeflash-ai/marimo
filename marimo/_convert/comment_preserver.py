@@ -95,20 +95,22 @@ class CommentPreserver:
             # If cell count changed, we can't preserve comments reliably
             return transformed_sources
 
-        result = []
-        for i, (original, transformed) in enumerate(
-            zip(original_sources, transformed_sources)
-        ):
-            comments = self.comments_by_source.get(i, [])
-            if not comments:
-                result.append(transformed)
-                continue
+        # Pre-allocate result list for better memory locality and avoid repeated resizing
+        result = [None] * len(original_sources)
 
-            # Apply comment preservation with variable name updates if needed
-            preserved_source = self._apply_comments_to_source(
-                original, transformed, comments
-            )
-            result.append(preserved_source)
+        # Use local variable access for speed in tight loop
+        comments_by_source = self.comments_by_source
+        _apply_comments_to_source = self._apply_comments_to_source
+
+        for i in range(len(original_sources)):
+            comments = comments_by_source.get(i, [])
+            if not comments:
+                result[i] = transformed_sources[i]
+            else:
+                # Apply comment preservation with variable name updates if needed
+                result[i] = _apply_comments_to_source(
+                    original_sources[i], transformed_sources[i], comments
+                )
 
         return result
 
@@ -122,58 +124,65 @@ class CommentPreserver:
         if not comments:
             return transformed
 
+        # Split lines once and reuse: avoid repeatedly calling .split
         original_lines = original.split("\n")
         transformed_lines = transformed.split("\n")
 
-        # Create a mapping of line numbers to comments
+        # Group comments by line in a single pass with setdefault for speed
         comments_by_line: dict[int, list[CommentToken]] = {}
         for comment in comments:
-            line_num = comment.line
-            if line_num not in comments_by_line:
-                comments_by_line[line_num] = []
-            comments_by_line[line_num].append(comment)
+            comments_by_line.setdefault(comment.line, []).append(comment)
 
-        # Apply comments to transformed lines
-        result_lines = transformed_lines.copy()
+        # Use a list mutation for efficiency, avoid copying transformed_lines unless necessary
+        result_lines = transformed_lines[:]
+        num_result_lines = len(result_lines)
+        line_present_set = None  # Lazily populated if we encounter standalone (col==0) comments
+
+        # Predeclare rstrip for method lookup efficiency
+        rstrip = str.rstrip
 
         for line_num, line_comments in comments_by_line.items():
             target_line_idx = min(
-                line_num - 1, len(result_lines) - 1
+                line_num - 1, num_result_lines - 1
             )  # Convert to 0-based, clamp to bounds
 
             if target_line_idx < 0:
                 continue
 
-            # Select the best comment for this line (line comments take precedence)
+            # Line comment (col == 0) takes precedence; else use the last inline comment
             line_comment = None
             inline_comment = None
 
             for comment in line_comments:
-                if comment.col == 0:  # Line comment (starts at column 0)
+                if comment.col == 0:
                     line_comment = comment
-                    break  # Line comment takes precedence, no need to check others
-                else:  # Inline comment
-                    inline_comment = comment
+                    break
+                else:
+                    inline_comment = comment  # Take the last inline_comment
 
-            # Prefer line comment over inline comment
             chosen_comment = line_comment if line_comment else inline_comment
 
             if chosen_comment:
                 comment_text = chosen_comment.text
-                if chosen_comment.col > 0 and target_line_idx < len(
-                    original_lines
-                ):
+                col = chosen_comment.col
+
+                if col > 0 and target_line_idx < len(original_lines):
                     # Inline comment - append to the line if not already present
                     current_line = result_lines[target_line_idx]
-                    if not current_line.rstrip().endswith(
-                        comment_text.rstrip()
-                    ):
+                    if not rstrip(current_line).endswith(rstrip(comment_text)):
                         result_lines[target_line_idx] = (
-                            current_line.rstrip() + "  " + comment_text
+                            rstrip(current_line) + "  " + comment_text
                         )
-                elif target_line_idx >= 0 and comment_text not in result_lines:
+                elif target_line_idx >= 0:
                     # Standalone comment - insert above the line if not already present
-                    result_lines.insert(target_line_idx, comment_text)
+                    # Avoid O(N) .__contains__ on result_lines by using a set (only when needed)
+                    if line_present_set is None:
+                        line_present_set = set(result_lines)
+                    if comment_text not in line_present_set:
+                        result_lines.insert(target_line_idx, comment_text)
+                        # Keep the set up to date
+                        line_present_set.add(comment_text)
+                        num_result_lines += 1  # Insert grows result_lines
 
         return "\n".join(result_lines)
 
