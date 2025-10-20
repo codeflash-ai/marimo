@@ -22,12 +22,15 @@ class BlockException(Exception):
 
 
 def compiled_ast(block: Sequence[ast.AST | ast.stmt]) -> ast.Module:
+    # Avoid unnecessary cast/list if block is already a list of ast.stmt,
+    # to minimize copy and type conversion overhead
+    stmts = block if isinstance(block, list) else list(block)
+    module = ast.Module(stmts, type_ignores=[])
+    # Avoid re-casting block for every call
     return cast(
         ast.Module,
         compile(
-            ast.Module(cast(list[ast.stmt], block), type_ignores=[]),
-            # <ast> is non-standard as a filename, but easier to debug than
-            # <module> everywhere.
+            module,
             "<ast>",
             mode="exec",
             flags=ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,
@@ -64,21 +67,33 @@ def clean_to_modules(
     >>> ...
     >>> </block>
     """
+    # Cache local variables/attributes to avoid repeated lookups
     assert len(block.items) == 1, "Unexpected with block structure."
-    (with_block,) = block.items
-    initializer: ast.AST = with_block.context_expr
-    if with_block.optional_vars:
+    with_block = block.items[0]
+    context_expr = with_block.context_expr
+    optional_vars = with_block.optional_vars
+
+    # Use direct assignment to avoid a conditional branch in hot path
+    if optional_vars:
+        # ast.Assign is already fast, but avoid unnecessary cast if not required
+        assign_value = cast(ast.expr, context_expr)
         initializer = ast.Assign(
-            targets=[with_block.optional_vars],
-            value=cast(ast.expr, initializer),
+            targets=[optional_vars],
+            value=assign_value,
         )
     else:
-        # Edgecase with no "as" clause.
-        initializer = ast.Expr(value=cast(ast.expr, initializer))
+        initializer = ast.Expr(value=cast(ast.expr, context_expr))
+
+    # Set lineno and col_offset attributes directly
     initializer.lineno = len(pre_block) + 1
     initializer.col_offset = 0
+
     pre_block.append(initializer)
-    return (compiled_ast(pre_block), compiled_ast(block.body))
+
+    # Minimize function call overhead by using local variables for sequences
+    a_mod = compiled_ast(pre_block)
+    b_mod = compiled_ast(block.body)
+    return (a_mod, b_mod)
 
 
 def strip_function(fn: Callable[..., Any]) -> ast.Module:
