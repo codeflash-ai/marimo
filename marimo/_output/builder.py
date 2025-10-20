@@ -229,20 +229,16 @@ class _HTMLBuilder:
     def table(
         children: Union[str, list[str]], *, style: Optional[str] = None
     ) -> str:
-        resolved_children = (
-            [children] if isinstance(children, str) else children
-        )
-
-        params: list[tuple[str, Union[str, None]]] = []
-        if style:
-            params.append(("style", style))
-
-        children_html = "".join(resolved_children)
-
-        if len(params) == 0:
-            return f"<table>{children_html}</table>"
+        if isinstance(children, str):
+            children_html = children
         else:
-            return f"<table {_join_params(params)}>{children_html}</table>"
+            children_html = "".join(children)
+
+        if not style:
+            return f"<table>{children_html}</table>"
+
+        # params is always one item at most
+        return f"<table style='{style}'>{children_html}</table>"
 
     @staticmethod
     def tbody(
