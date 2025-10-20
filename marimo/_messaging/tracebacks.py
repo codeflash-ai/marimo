@@ -5,6 +5,8 @@ import sys
 
 from marimo._messaging.types import Stderr
 
+_CODEHILITE = 'class="codehilite"'
+
 
 def _highlight_traceback(traceback: str) -> str:
     """
@@ -51,4 +53,5 @@ def _trim_traceback(traceback: str) -> str:
 
 
 def is_code_highlighting(value: str) -> bool:
-    return 'class="codehilite"' in value
+    # Cache the search string as a global constant for slightly faster lookup
+    return _CODEHILITE in value
