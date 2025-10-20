@@ -119,12 +119,9 @@ def build_stateless_plugin(
     -------
     HTML text for the component
     """
-    attrs = [_build_attr(name, value) for name, value in args.items()]
-    return (
-        f"<{component_name} {' '.join(attrs)}>"
-        f"{slotted_html}"
-        f"</{component_name}>"
-    )
+    # Avoid intermediate list: use generator and join directly
+    attrs = " ".join(_build_attr(name, value) for name, value in args.items())
+    return f"<{component_name} {attrs}>{slotted_html}</{component_name}>"
 
 
 def parse_initial_value(text: str) -> JSONType:

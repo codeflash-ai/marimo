@@ -11,7 +11,6 @@ from typing import (
     Optional,
     TypeVar,
     cast,
-    overload,
 )
 
 import marimo._runtime.output._output as output
@@ -114,20 +113,27 @@ class _Progress(Html):
         self.closed = True
 
     def _get_text(self) -> str:
+        # Build dict upfront to reduce temp allocations
+        args: dict[str, JSONType] = {}
+        if self.title is not None:
+            args["title"] = self.title
+        if self.subtitle is not None:
+            args["subtitle"] = self.subtitle
+        if self.total is not None:
+            args["total"] = self.total
+        args["progress"] = True if self.loading_spinner else self.current
+
+        rate = self._get_rate()
+        if rate is not None:
+            args["rate"] = rate
+
+        eta = self._get_eta()
+        if eta is not None:
+            args["eta"] = eta
+
         return build_stateless_plugin(
             component_name="marimo-progress",
-            args=_remove_none_values(
-                {
-                    "title": self.title,
-                    "subtitle": self.subtitle,
-                    "total": self.total,
-                    # 'progress' is True is we don't know the total,
-                    # which shows a loading spinner
-                    "progress": True if self.loading_spinner else self.current,
-                    "rate": self._get_rate(),
-                    "eta": self._get_eta(),
-                }
-            ),
+            args=args,
         )
 
     def _calculate_rate(self) -> Optional[float]:
@@ -315,53 +321,164 @@ class progress_bar(Generic[S]):
         disabled (bool, optional): If True, disable the progress bar.
     """
 
-    @overload
     def __init__(
         self,
-        collection: Collection[S] = ...,
+        collection: Optional[
+            Collection[S] | Iterator[S] | AsyncIterable[S]
+        ] = None,
         *,
-        title: Optional[str] = ...,
-        subtitle: Optional[str] = ...,
-        completion_title: Optional[str] = ...,
-        completion_subtitle: Optional[str] = ...,
-        total: Optional[int] = ...,
-        show_rate: bool = ...,
-        show_eta: bool = ...,
-        remove_on_exit: bool = ...,
-        disabled: bool = ...,
-    ): ...
+        title: Optional[str] = None,
+        subtitle: Optional[str] = None,
+        completion_title: Optional[str] = None,
+        completion_subtitle: Optional[str] = None,
+        total: Optional[int] = None,
+        show_rate: bool = True,
+        show_eta: bool = True,
+        remove_on_exit: bool = False,
+        disabled: bool = False,
+    ):
+        self.completion_title = completion_title
+        self.completion_subtitle = completion_subtitle
+        self.remove_on_exit = remove_on_exit
+        self.disabled = disabled
+        self.step: int = 1
+        self.collection = collection
+        self._is_async = isinstance(collection, AsyncIterable)
 
-    @overload
-    def __init__(
-        self,
-        collection: Iterator[S] | AsyncIterable[S] = ...,
-        *,
-        title: Optional[str] = ...,
-        subtitle: Optional[str] = ...,
-        completion_title: Optional[str] = ...,
-        completion_subtitle: Optional[str] = ...,
-        total: int = ...,
-        show_rate: bool = ...,
-        show_eta: bool = ...,
-        remove_on_exit: bool = ...,
-        disabled: bool = ...,
-    ): ...
+        if collection is not None:
+            if total is None:
+                if isinstance(collection, Sized):
+                    total = len(collection)
 
-    @overload
+                else:
+                    raise TypeError(
+                        "Cannot determine the length of a collection. "
+                        "A `total` must be provided."
+                    )
+
+            if isinstance(collection, range):
+                self.step = cast(range, collection).step
+
+        elif total is None:
+            raise ValueError(
+                "`total` is required when using as a context manager"
+            )
+
+        self.progress = ProgressBar(
+            title=title,
+            subtitle=subtitle,
+            total=total,
+            show_rate=show_rate,
+            show_eta=show_eta,
+        )
+        if not disabled:
+            output.append(self.progress)
+
     def __init__(
         self,
-        collection: None = ...,
+        collection: Optional[
+            Collection[S] | Iterator[S] | AsyncIterable[S]
+        ] = None,
         *,
-        title: Optional[str] = ...,
-        subtitle: Optional[str] = ...,
-        completion_title: Optional[str] = ...,
-        completion_subtitle: Optional[str] = ...,
-        total: int = ...,
-        show_rate: bool = ...,
-        show_eta: bool = ...,
-        remove_on_exit: bool = ...,
-        disabled: bool = ...,
-    ): ...
+        title: Optional[str] = None,
+        subtitle: Optional[str] = None,
+        completion_title: Optional[str] = None,
+        completion_subtitle: Optional[str] = None,
+        total: Optional[int] = None,
+        show_rate: bool = True,
+        show_eta: bool = True,
+        remove_on_exit: bool = False,
+        disabled: bool = False,
+    ):
+        self.completion_title = completion_title
+        self.completion_subtitle = completion_subtitle
+        self.remove_on_exit = remove_on_exit
+        self.disabled = disabled
+        self.step: int = 1
+        self.collection = collection
+        self._is_async = isinstance(collection, AsyncIterable)
+
+        if collection is not None:
+            if total is None:
+                if isinstance(collection, Sized):
+                    total = len(collection)
+
+                else:
+                    raise TypeError(
+                        "Cannot determine the length of a collection. "
+                        "A `total` must be provided."
+                    )
+
+            if isinstance(collection, range):
+                self.step = cast(range, collection).step
+
+        elif total is None:
+            raise ValueError(
+                "`total` is required when using as a context manager"
+            )
+
+        self.progress = ProgressBar(
+            title=title,
+            subtitle=subtitle,
+            total=total,
+            show_rate=show_rate,
+            show_eta=show_eta,
+        )
+        if not disabled:
+            output.append(self.progress)
+
+    def __init__(
+        self,
+        collection: Optional[
+            Collection[S] | Iterator[S] | AsyncIterable[S]
+        ] = None,
+        *,
+        title: Optional[str] = None,
+        subtitle: Optional[str] = None,
+        completion_title: Optional[str] = None,
+        completion_subtitle: Optional[str] = None,
+        total: Optional[int] = None,
+        show_rate: bool = True,
+        show_eta: bool = True,
+        remove_on_exit: bool = False,
+        disabled: bool = False,
+    ):
+        self.completion_title = completion_title
+        self.completion_subtitle = completion_subtitle
+        self.remove_on_exit = remove_on_exit
+        self.disabled = disabled
+        self.step: int = 1
+        self.collection = collection
+        self._is_async = isinstance(collection, AsyncIterable)
+
+        if collection is not None:
+            if total is None:
+                if isinstance(collection, Sized):
+                    total = len(collection)
+
+                else:
+                    raise TypeError(
+                        "Cannot determine the length of a collection. "
+                        "A `total` must be provided."
+                    )
+
+            if isinstance(collection, range):
+                self.step = cast(range, collection).step
+
+        elif total is None:
+            raise ValueError(
+                "`total` is required when using as a context manager"
+            )
+
+        self.progress = ProgressBar(
+            title=title,
+            subtitle=subtitle,
+            total=total,
+            show_rate=show_rate,
+            show_eta=show_eta,
+        )
+        if not disabled:
+            output.append(self.progress)
 
     def __init__(
         self,
