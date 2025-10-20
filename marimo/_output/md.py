@@ -148,6 +148,7 @@ def _get_extension_configs() -> dict[str, dict[str, Any]]:
 MarkdownSize = Literal["sm", "base", "lg", "xl", "2xl"]
 
 
+@cache
 def _has_module(module_name: str) -> bool:
     try:
         return find_spec(module_name) is not None
