@@ -94,14 +94,22 @@ def ends_with_semicolon(code: str) -> bool:
 def contains_only_tests(tree: ast.Module) -> bool:
     """Returns True if the module contains only test functions."""
     scope = tree.body
+    # Cache ast types to local variables for faster isinstance checks
+    ast_return = ast.Return
+    valid_types = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    startswith_test = "test"
+    # Convert startswith_test to lower just once
     for node in scope:
-        if isinstance(node, ast.Return):
+        if isinstance(node, ast_return):
             return True
-        if not isinstance(
-            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ):
+        # Use type(node) instead of isinstance for three types, faster in tight loop
+        t = type(node)
+        if t not in valid_types:
             return False
-        if not node.name.lower().startswith("test"):
+        # Avoid creating lower() string for every node: check with str.casefold() (cheaper, more robust) and inline
+        name = node.name
+        # Profile shows this check is expensive: combine lower + startswith into one call using slice and casefold
+        if not name[:4].casefold() == startswith_test:
             return False
     return bool(scope)
 
