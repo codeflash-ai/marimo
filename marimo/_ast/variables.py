@@ -7,6 +7,8 @@ from typing import NamedTuple, Optional
 
 from marimo._types.ids import CellId_t
 
+_PRIVATE_PREFIX_REGEX = re.compile(r"^_cell_\w+?_")
+
 
 class UnmagledLocal(NamedTuple):
     name: str
@@ -47,11 +49,11 @@ def unmangle_local(
 ) -> UnmagledLocal:
     if not is_mangled_local(name, cell_id):
         return UnmagledLocal(name, CellId_t(""))
-    private_prefix = r"^_cell_\w+?_"
+    private_prefix = _PRIVATE_PREFIX_REGEX
     if cell_id:
-        private_prefix = f"^_cell_{cell_id}_"
+        private_prefix = re.compile(f"^_cell_{cell_id}_")
     return UnmagledLocal(
-        re.sub(private_prefix, "_", name), CellId_t(name.split("_")[2])
+        private_prefix.sub("_", name), CellId_t(name.split("_")[2])
     )
 
 
