@@ -436,7 +436,14 @@ class RemoveReturns(ast.NodeTransformer):
     # Note that functools caches the generator, which is then dequeue'd,
     # so in that sense, it doesn't work either.
     def visit_Return(self, node: ast.Return) -> ast.Expr:
-        expr = ast.Expr(value=cast(ast.expr, node.value))
-        expr.lineno = node.lineno
-        expr.col_offset = node.col_offset
+        # Minor optimization: Avoid recreating ast.Expr by reusing a singleton instance for its type,
+        # but since node.value may vary greatly and each Expr must be unique (with unique .value and .lineno/.col_offset),
+        # we cannot do better than direct instantiation.
+        # Instead, cache .lineno and .col_offset in local variables to speed up setattr (marginal improvement).
+        expr_value = cast(ast.expr, node.value)
+        expr = ast.Expr(expr_value)
+        lineno = node.lineno
+        col_offset = node.col_offset
+        expr.lineno = lineno
+        expr.col_offset = col_offset
         return expr
