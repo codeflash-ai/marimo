@@ -9,14 +9,14 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
 @app.cell
 def display_slider(mo):
     slider = mo.ui.slider(1, 10)
-    mo.md(f"Here is a slider: {slider}")
-    return
+    return mo.md(f"Here is a slider: {slider}")
 
 
 @app.cell
