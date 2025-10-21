@@ -149,13 +149,16 @@ class PyodideStdin(Stdin):
             raise TypeError(
                 f"prompt must be a str, not {type(prompt).__name__}"
             )
-        max_bytes = std_stream_max_bytes()
-        if sys.getsizeof(prompt) > max_bytes:
-            prompt = (
-                "Warning: marimo truncated a very large console output.\n"
-                + prompt[: int(max_bytes)]
-                + " ... "
-            )
+
+        prompt_size = sys.getsizeof(prompt)
+        if prompt_size > 128:
+            max_bytes = std_stream_max_bytes()
+            if prompt_size > max_bytes:
+                prompt = (
+                    "Warning: marimo truncated a very large console output.\n"
+                    + prompt[: int(max_bytes)]
+                    + " ... "
+                )
 
         CellOp(
             cell_id=self.stream.cell_id,
@@ -180,4 +183,7 @@ class PyodideStdin(Stdin):
         # hint only included for compatibility with sys.stdin.readlines API;
         # we don't support it.
         del hint
-        return self._readline_with_prompt(prompt="").split("\n")
+        response = self._readline_with_prompt(prompt="")
+        if "\n" in response:
+            return response.split("\n")
+        return [response]
