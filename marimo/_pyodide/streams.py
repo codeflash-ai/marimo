@@ -149,7 +149,13 @@ class PyodideStdin(Stdin):
             raise TypeError(
                 f"prompt must be a str, not {type(prompt).__name__}"
             )
-        max_bytes = std_stream_max_bytes()
+
+        try:
+            max_bytes = PyodideStdin._max_bytes
+        except AttributeError:
+            max_bytes = std_stream_max_bytes()
+            PyodideStdin._max_bytes = max_bytes
+
         if sys.getsizeof(prompt) > max_bytes:
             prompt = (
                 "Warning: marimo truncated a very large console output.\n"
