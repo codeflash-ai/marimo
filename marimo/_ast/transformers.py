@@ -118,15 +118,20 @@ class NameTransformer(ast.NodeTransformer):
         return node
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        # Optimize by accessing dict lookup once and store for quick reuse
+        substitutions = self._name_substitutions
+        name = node.name
+
         self.generic_visit(node)
-        if node.name in self._name_substitutions:
+
+        new_name = substitutions.get(name)
+        if new_name is not None:
             self.made_changes = True
-            return ast.FunctionDef(
-                **{
-                    **node.__dict__,
-                    "name": self._name_substitutions[node.name],
-                }
-            )
+            # Avoid unnecessary dict operations; only copy and update as needed
+            # Copy node's __dict__ except "name", then overwrite with new name
+            dct = node.__dict__.copy()
+            dct["name"] = new_name
+            return ast.FunctionDef(**dct)
         return node
 
     def visit_AsyncFunctionDef(
