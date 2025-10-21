@@ -7,6 +7,8 @@ from typing import NamedTuple, Optional
 
 from marimo._types.ids import CellId_t
 
+_GENERAL_PRIVATE_PREFIX_RE = re.compile(r"^_cell_\w+?_")
+
 
 class UnmagledLocal(NamedTuple):
     name: str
@@ -47,12 +49,19 @@ def unmangle_local(
 ) -> UnmagledLocal:
     if not is_mangled_local(name, cell_id):
         return UnmagledLocal(name, CellId_t(""))
-    private_prefix = r"^_cell_\w+?_"
-    if cell_id:
-        private_prefix = f"^_cell_{cell_id}_"
-    return UnmagledLocal(
-        re.sub(private_prefix, "_", name), CellId_t(name.split("_")[2])
-    )
+    # If cell_id is the default empty value, use pre-compiled regex
+    if not cell_id:
+        unmangled_name = _GENERAL_PRIVATE_PREFIX_RE.sub("_", name)
+        # Extract the cell id by splitting (faster than repeated split)
+        cell_id_str = name.split("_")[2]
+        return UnmagledLocal(unmangled_name, CellId_t(cell_id_str))
+    else:
+        # Compile regex only once per function call for specific cell id
+        # Using re.escape to safely insert cell_id into pattern
+        private_prefix = re.compile(rf"^_cell_{re.escape(str(cell_id))}_")
+        unmangled_name = private_prefix.sub("_", name)
+        cell_id_str = name.split("_")[2]
+        return UnmagledLocal(unmangled_name, CellId_t(cell_id_str))
 
 
 def is_mangled_local(name: str, cell_id: CellId_t = _EMPTY_CELL_ID) -> bool:
