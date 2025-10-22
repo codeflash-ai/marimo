@@ -27,24 +27,28 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
 
         Returns 2 for 2-space indentation or 4 for 4-space indentation.
         """
+        # Use local variable for better attribute access speed
+        LIST_PATTERN = self.LIST_PATTERN
+        FOUR_SPACES = self.FOUR_SPACES
         indents: list[int] = []
+        append = indents.append  # localize for small gain in tight loop
+
         for line in lines:
-            match = self.LIST_PATTERN.match(line)
+            match = LIST_PATTERN.match(line)
             if match:
                 indent_str = match.group(1)
                 if indent_str:  # Skip non-indented items
-                    indent_count = len(
-                        indent_str.replace("\t", self.FOUR_SPACES)
-                    )
-                    indents.append(indent_count)
+                    # Avoid repeated replace by checking for tab
+                    if "\t" in indent_str:
+                        indent_str = indent_str.replace("\t", FOUR_SPACES)
+                    indent_count = len(indent_str)
+                    append(indent_count)
 
         if not indents:
             return self.BASE_INDENT_SIZE
 
-        # Find the smallest non-zero indent - this is likely our base level
         min_indent = min(indents)
 
-        # Choose the closest allowed indent level
         if min_indent <= 2:
             return 2
         else:
@@ -93,28 +97,22 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
         if not lines:
             return lines
 
-        # Detect the base indentation level used in this document
         base_level = self._detect_base_indent(lines)
+        LIST_PATTERN = self.LIST_PATTERN
+        normalize = self._normalize_indentation
 
+        # Preallocate result_lines for memory efficiency where possible
         result_lines: list[str] = []
+        append = result_lines.append  # Localize method for better perf
 
         for line in lines:
-            match = self.LIST_PATTERN.match(line)
+            match = LIST_PATTERN.match(line)
             if match:
                 indent, marker, space, content = match.groups()
-
-                # Normalize the indentation based on detected base level
-                normalized_indent = self._normalize_indentation(
-                    indent, base_level
-                )
-
-                # Reconstruct the line with normalized indentation
-                normalized_line = (
-                    f"{normalized_indent}{marker}{space}{content}"
-                )
-                result_lines.append(normalized_line)
+                normalized_indent = normalize(indent, base_level)
+                append(f"{normalized_indent}{marker}{space}{content}")
             else:
-                result_lines.append(line)
+                append(line)
 
         return result_lines
 
