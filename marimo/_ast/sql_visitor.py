@@ -10,6 +10,8 @@ from typing import Any, Literal, Optional, Union
 from marimo import _loggers
 from marimo._dependencies.dependencies import DependencyManager
 
+_RE_SIMPLE_TOKEN_END = re.compile(r"[\s\-/]")
+
 LOGGER = _loggers.marimo_logger()
 
 COMMON_FILE_EXTENSIONS = (
@@ -102,9 +104,13 @@ class _TokenExtractor:
     def __init__(self, sql_statement: str, tokens: list[Any]) -> None:
         self.sql_statement = sql_statement
         self.tokens = tokens
+        # Will be set if duckdb is imported (for is_keyword)
+        self._duckdb_token_type_keyword = None
+        self._lowered_token_cache: dict[int, str] = {}
 
     def token_str(self, i: int) -> str:
-        sql_statement, tokens = self.sql_statement, self.tokens
+        sql_statement = self.sql_statement
+        tokens = self.tokens
         token = tokens[i]
         start = token[0]
 
@@ -118,10 +124,12 @@ class _TokenExtractor:
             end = sql_statement.find("'", start + 1) + 1
         else:
             # For non-quoted tokens, find until space or comment
-            maybe_end = re.search(r"[\s\-/]", sql_statement[start:])
-            end = (
-                start + maybe_end.start() if maybe_end else len(sql_statement)
-            )
+            slice_str = sql_statement[start:]
+            maybe_end = _RE_SIMPLE_TOKEN_END.search(slice_str)
+            if maybe_end:
+                end = start + maybe_end.start()
+            else:
+                end = len(sql_statement)
             if i + 1 < len(tokens):
                 # For tokens squashed together e.g. '(select' or 'x);;'
                 # in (select * from x);;
@@ -130,11 +138,16 @@ class _TokenExtractor:
         return sql_statement[start:end]
 
     def is_keyword(self, i: int, match: str) -> bool:
-        import duckdb
-
-        if self.tokens[i][1] != duckdb.token_type.keyword:
+        self._ensure_duckdb_token_type()
+        token_type_keyword = self._duckdb_token_type_keyword
+        if self.tokens[i][1] != token_type_keyword:
             return False
-        return self.token_str(i).lower() == match
+        # Cache lower-cased token strings by index
+        lowered = self._lowered_token_cache.get(i)
+        if lowered is None:
+            lowered = self.token_str(i).lower()
+            self._lowered_token_cache[i] = lowered
+        return lowered == match
 
     def strip_quotes(self, token: str) -> str:
         if token.startswith('"') and token.endswith('"'):
@@ -142,6 +155,13 @@ class _TokenExtractor:
         elif token.startswith("'") and token.endswith("'"):
             return token.strip("'")
         return token
+
+    def _ensure_duckdb_token_type(self):
+        # Only import once per extractor
+        if self._duckdb_token_type_keyword is None:
+            import duckdb
+
+            self._duckdb_token_type_keyword = duckdb.token_type.keyword
 
 
 @dataclass
