@@ -240,9 +240,4 @@ def safe_get_context() -> Optional[RuntimeContext]:
 
 
 def runtime_context_installed() -> bool:
-    try:
-        get_context()
-    except ContextNotInitializedError:
-        return False
-    else:
-        return True
+    return _THREAD_LOCAL_CONTEXT.runtime_context is not None
