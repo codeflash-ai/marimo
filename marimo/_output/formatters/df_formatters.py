@@ -49,18 +49,19 @@ def polars_dot_to_mermaid(dot: str) -> str:
     edge_regex = r"(?P<node1>\w+) -- (?P<node2>\w+)"
     node_regex = r"(?P<node>\w+)(\s+)?\[label=\"(?P<label>.*)\"]"
 
-    nodes = re.finditer(node_regex, dot)
-    edges = re.finditer(edge_regex, dot)
+    nodes = re.findall(node_regex, dot)
+    edges = re.findall(edge_regex, dot)
 
     mermaid_str = "\n".join(
         [
             "graph TD",
-            *[f'\t{n["node"]}["{n["label"]}"]' for n in nodes],
-            *[f"\t{e['node1']} --- {e['node2']}" for e in edges],
+            *[f'\t{node}["{label}"]' for node, _, label in nodes],
+            *[f"\t{node1} --- {node2}" for node1, node2 in edges],
         ]
     )
 
     # replace [https://...] with <a> tags to avoid Mermaid interpreting it as markdown
+    # The lambda remains optimal; do not compile regex here, as single-pass usage.
     mermaid_str = re.sub(
         r"\[(https?://[^\]]+)\]",
         lambda m: f"[<a href='{m.group(1)}'>{m.group(1)}</a>]",
