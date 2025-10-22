@@ -27,24 +27,29 @@ class FlexibleIndentPreprocessor(preprocessors.Preprocessor):  # type: ignore[mi
 
         Returns 2 for 2-space indentation or 4 for 4-space indentation.
         """
+        # Localize attribute lookup for micro-optimization
+        list_pattern_match = self.LIST_PATTERN.match
+        four_spaces = self.FOUR_SPACES
+
         indents: list[int] = []
+        append = indents.append
+
         for line in lines:
-            match = self.LIST_PATTERN.match(line)
+            match = list_pattern_match(line)
             if match:
                 indent_str = match.group(1)
                 if indent_str:  # Skip non-indented items
-                    indent_count = len(
-                        indent_str.replace("\t", self.FOUR_SPACES)
-                    )
-                    indents.append(indent_count)
+                    # Fast check: if no tab, avoid .replace call
+                    if "\t" in indent_str:
+                        indent_str = indent_str.replace("\t", four_spaces)
+                    indent_count = len(indent_str)
+                    append(indent_count)
 
         if not indents:
             return self.BASE_INDENT_SIZE
 
-        # Find the smallest non-zero indent - this is likely our base level
         min_indent = min(indents)
 
-        # Choose the closest allowed indent level
         if min_indent <= 2:
             return 2
         else:
