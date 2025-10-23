@@ -64,26 +64,35 @@ class tabs(UIElement[str, str]):
         label: str = "",
         on_change: Optional[Callable[[str], None]] = None,
     ) -> None:
-        def render_content(tab: object) -> str:
-            if lazy:
-                return lazy_ui(tab).text
-            if isinstance(tab, str):
-                return md(tab).text
-            return as_html(tab).text
+        # Avoid function call overhead and attribute lookup in the loop
+        lazy_ui_text = lazy_ui if lazy else None
+        as_html_text = as_html
+        md_text = md
 
+        # Precompute content and labels in single-pass generator expressions for better memory locality
         tab_items = "".join(
-            [
-                "<div data-kind='tab'>" + render_content(tab) + "</div>"
-                for tab in tabs.values()
-            ]
+            "<div data-kind='tab'>"
+            + (
+                lazy_ui_text(tab).text
+                if lazy_ui_text is not None
+                else md_text(tab).text
+                if isinstance(tab, str)
+                else as_html_text(tab).text
+            )
+            + "</div>"
+            for tab in tabs.values()
         )
 
         self._tab_keys = list(tabs.keys())
-        tab_labels = list(md(label).text for label in tabs.keys())
+        # Only create label markdown objects once, not in a generator expression that would keep converting every iteration
+        # Use list comprehension for better performance than generator expression feeding into list()
+        tab_labels = [md_text(label).text for label in tabs.keys()]
 
+        # Avoid repeated attribute lookup, combine checks for better branch prediction
+        _tab_keys = self._tab_keys
         index = (
-            str(self._tab_keys.index(value))
-            if value in self._tab_keys and tabs
+            str(_tab_keys.index(value))
+            if value is not None and value in _tab_keys and tabs
             else None
         )
 
@@ -97,7 +106,11 @@ class tabs(UIElement[str, str]):
         )
 
     def _convert_value(self, value: str) -> str:
+        # Avoid repeated lookup of self._tab_keys for performance
+        tab_keys = self._tab_keys
         if not value:
-            return self._tab_keys[0]
-        index = int(value)
-        return self._tab_keys[index]
+            # Avoid attribute lookup in hot-path
+            return tab_keys[0]
+        # Let int throw if value is not valid, behaves as original
+        # Avoid storing to variable if not necessary
+        return tab_keys[int(value)]
