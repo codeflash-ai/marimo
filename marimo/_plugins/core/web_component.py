@@ -46,14 +46,23 @@ S = TypeVar("S", bound=JSONType)
 
 
 def _build_attr(name: str, value: JSONType) -> str:
-    processed = escape(encode_json_str(value))
+    processed = encode_json_str(value)
     # manual escapes for things html.escape doesn't escape
     #
     # - backslashes, when unescaped can lead to problems
     # when embedding in markdown
     # - dollar sign, when unescaped can incorrectly be recognized as
     # latex delimiter when embedding into markdown
-    processed = processed.replace("\\", "&#92;").replace("$", "&#36;")
+    if processed and (
+        "&" in processed
+        or "<" in processed
+        or ">" in processed
+        or "'" in processed
+        or '"' in processed
+    ):
+        processed = escape(processed)
+    if "\\" in processed or "$" in processed:
+        processed = processed.replace("\\", "&#92;").replace("$", "&#36;")
     return f"data-{name}='{processed}'"
 
 
@@ -119,12 +128,9 @@ def build_stateless_plugin(
     -------
     HTML text for the component
     """
-    attrs = [_build_attr(name, value) for name, value in args.items()]
-    return (
-        f"<{component_name} {' '.join(attrs)}>"
-        f"{slotted_html}"
-        f"</{component_name}>"
-    )
+    # Use a generator expression and str.join for minimal memory usage
+    attrs = " ".join(_build_attr(name, value) for name, value in args.items())
+    return f"<{component_name} {attrs}>{slotted_html}</{component_name}>"
 
 
 def parse_initial_value(text: str) -> JSONType:
