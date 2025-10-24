@@ -340,10 +340,11 @@ class CellManager:
         Returns:
             dict[CellId_t, str]: Dictionary mapping cell to their source code
         """
-        return {
-            cell_id: cell_data.code
-            for cell_id, cell_data in self._cell_data.items()
-        }
+        cell_data_items = self._cell_data.items()
+        result = {}
+        for cell_id, cell_data in cell_data_items:
+            result[cell_id] = cell_data.code
+        return result
 
     def configs(self) -> Iterable[CellConfig]:
         """Get an iterator over all cell configurations.
