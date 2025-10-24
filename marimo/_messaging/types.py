@@ -46,7 +46,7 @@ class Stdout(io.TextIOBase):
         pass
 
     def write(self, __s: str) -> int:
-        return self._write_with_mimetype(__s, mimetype="text/plain")
+        return self._write_with_mimetype(__s, "text/plain")
 
     def _stop(self) -> None:
         """Tear down resources, if any."""
