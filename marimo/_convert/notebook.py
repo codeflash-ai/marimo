@@ -60,24 +60,35 @@ def convert_from_notebook_v1_to_ir(
         str: The python source code.
     """
 
-    return NotebookSerializationV1(
-        app=AppInstantiation(options={}),
-        header=None,
-        version=None,
-        cells=[
+    # Avoid repeated .get("config", ...) calls by lifting out config once per cell
+    cells = notebook_v1.get("cells", [])
+    cell_defs = []
+    for cell in cells:
+        config = cell.get("config")
+        if config is None:
+            column = None
+            disabled = False
+            hide_code = False
+        else:
+            column = config.get("column", None)
+            disabled = config.get("disabled", False)
+            hide_code = config.get("hide_code", False)
+        cell_defs.append(
             CellDef(
                 code=cell.get("code", "") or "",
                 name=cell.get("name", "") or "",
                 options={
-                    "column": cell.get("config", {}).get("column", None),
-                    "disabled": cell.get("config", {}).get("disabled", False),
-                    "hide_code": cell.get("config", {}).get(
-                        "hide_code", False
-                    ),
+                    "column": column,
+                    "disabled": disabled,
+                    "hide_code": hide_code,
                 },
             )
-            for cell in notebook_v1.get("cells", [])
-        ],
+        )
+    return NotebookSerializationV1(
+        app=AppInstantiation(options={}),
+        header=None,
+        version=None,
+        cells=cell_defs,
         violations=[],
         valid=True,
     )
