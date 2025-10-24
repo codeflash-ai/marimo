@@ -41,15 +41,19 @@ class VariableLineVisitor(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Visit ImportFrom nodes to find imported variable definitions."""
+        # Use early exit to avoid generic_visit if target found
         for alias in node.names:
             if (
                 alias.asname == self.target_variable
-                or alias.name == self.target_variable
-            ):
+                if alias.asname is not None
+                else False
+            ) or alias.name == self.target_variable:
                 self.line_number = node.lineno
                 self.column_number = node.col_offset + 1
                 return
-        self.generic_visit(node)
+        # Only visit children if line_number is still None (target not found)
+        if self.line_number is None:
+            self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         """Visit Import nodes to find imported variable definitions."""
