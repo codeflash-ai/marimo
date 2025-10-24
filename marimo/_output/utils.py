@@ -25,7 +25,10 @@ def uri_encode_component(code: str) -> str:
 
 def uri_decode_component(code: str) -> str:
     """Equivalent to `decodeURIComponent` in JavaScript."""
-    return urllib.parse.unquote(code)
+    try:
+        return urllib.parse.unquote_to_bytes(code).decode("utf-8")
+    except UnicodeDecodeError:
+        return urllib.parse.unquote(code)
 
 
 def normalize_dimension(value: Union[int, float, str, None]) -> Optional[str]:
