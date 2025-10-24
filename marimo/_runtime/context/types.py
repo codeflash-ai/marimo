@@ -10,7 +10,8 @@ import abc
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from marimo._ast.app_config import _AppConfig
 from marimo._messaging.context import HTTP_REQUEST_CTX
@@ -18,10 +19,7 @@ from marimo._messaging.context import HTTP_REQUEST_CTX
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from marimo._ast.app import (
-        AppKernelRunnerRegistry,
-        InternalApp,
-    )
+    from marimo._ast.app import AppKernelRunnerRegistry, InternalApp
     from marimo._config.config import MarimoConfig
     from marimo._messaging.types import Stderr, Stdout, Stream
     from marimo._output.hypertext import Html
@@ -234,9 +232,13 @@ def get_context() -> RuntimeContext:
     return _THREAD_LOCAL_CONTEXT.runtime_context
 
 
+@lru_cache(maxsize=1)
 def safe_get_context() -> Optional[RuntimeContext]:
     """Return the runtime context if it exists, otherwise None."""
-    return _THREAD_LOCAL_CONTEXT.runtime_context
+    # Assumes _THREAD_LOCAL_CONTEXT.runtime_context is stable/thread-local.
+    return cast(
+        Optional["RuntimeContext"], _THREAD_LOCAL_CONTEXT.runtime_context
+    )
 
 
 def runtime_context_installed() -> bool:
