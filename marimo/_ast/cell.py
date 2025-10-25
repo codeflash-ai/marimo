@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from marimo._messaging.types import Stream
     from marimo._output.hypertext import Html
 
+_CO_COROUTINE = inspect.CO_COROUTINE
+
 
 # TODO: Use rename="camel" for consistency in JSON-encoding
 class CellConfig(msgspec.Struct):
@@ -137,7 +139,7 @@ class ImportWorkspace:
 def _is_coroutine(code: Optional[CodeType]) -> bool:
     if code is None:
         return False
-    return inspect.CO_COROUTINE & code.co_flags == inspect.CO_COROUTINE
+    return _CO_COROUTINE & code.co_flags == _CO_COROUTINE
 
 
 @dataclasses.dataclass

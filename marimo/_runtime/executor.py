@@ -32,6 +32,8 @@ from marimo._runtime.primitives import (
 if TYPE_CHECKING:
     from marimo._runtime.dataflow import DirectedGraph
 
+_NAME_ERROR_REGEX = re.compile(r"'([^']*)'")
+
 _EXECUTOR_REGISTRY = EntryPointRegistry[type["Executor"]](
     "marimo.cell.executor",
 )
@@ -65,7 +67,13 @@ def _raise_name_error(
 ) -> None:
     if graph is None:
         raise MarimoRuntimeException from name_error
-    (missing_name,) = re.findall(r"'([^']*)'", str(name_error))
+    # Use .search for a single match, which is faster than .findall
+    match = _NAME_ERROR_REGEX.search(str(name_error))
+    if match is not None:
+        missing_name = match.group(1)
+    else:
+        # fallback, should not occur in hot path, keeps behavior unchanged
+        missing_name = ""
     _, private_cell_id = unmangle_local(missing_name)
     if missing_name in graph.definitions or private_cell_id:
         raise MarimoRuntimeException from MarimoMissingRefError(
