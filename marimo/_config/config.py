@@ -703,33 +703,34 @@ def merge_config(
     Returns:
         A merged configuration.
     """
-    # Remove the keymap overrides from the incoming config,
-    # so that they don't get merged into the new config
-    if new_config.get("keymap", {}).get("overrides") is not None:
+    # Optimize repeated get() chaining for "keymap" and "overrides"
+    keymap = new_config.get("keymap")
+    if keymap is not None and keymap.get("overrides") is not None:
         # Clone config to avoid modifying the original
         config = deep_copy(config)
-        config.get("keymap", {}).pop("overrides", {})
+        config_keymap = config.get("keymap")
+        if config_keymap is not None:
+            config_keymap.pop("overrides", {})
 
-    merged = cast(
+    # Avoid double cast by not recasting arguments inside deep_merge; cast the result only
+    merged: MarimoConfig = cast(
         MarimoConfig,
         deep_merge(
-            cast(dict[Any, Any], config), cast(dict[Any, Any], new_config)
+            config,  # type: ignore[arg-type]
+            new_config,  # type: ignore[arg-type]
         ),
     )
 
-    # Patches for backward compatibility
-    if "runtime" in merged:
-        if (
-            merged["runtime"].get("auto_reload") is False  # type:ignore[comparison-overlap]
-        ):
-            merged["runtime"]["auto_reload"] = "off"
-        elif (
-            merged["runtime"].get("auto_reload") is True  # type:ignore[comparison-overlap]
-        ):
-            merged["runtime"]["auto_reload"] = "lazy"
-        elif (
-            merged["runtime"].get("auto_reload") == "detect"  # type:ignore[comparison-overlap]
-        ):
-            merged["runtime"]["auto_reload"] = "lazy"
+    # Local caching merged["runtime"] if present to avoid repeated dict access
+    runtime = merged.get("runtime")
+    if runtime is not None:
+        ar_val = runtime.get("auto_reload")
+        # Using direct equality comparisons for clarity and slight speedup
+        if ar_val is False:  # type:ignore[comparison-overlap]
+            runtime["auto_reload"] = "off"
+        elif ar_val is True:  # type:ignore[comparison-overlap]
+            runtime["auto_reload"] = "lazy"
+        elif ar_val == "detect":  # type:ignore[comparison-overlap]
+            runtime["auto_reload"] = "lazy"
 
     return merged
