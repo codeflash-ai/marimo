@@ -72,20 +72,26 @@ def _format_variables(
     if not variables:
         return ""
 
-    variable_info = "\n\n## Available variables from other cells:\n"
+    lines = ["\n\n## Available variables from other cells:\n"]
+    append = (
+        lines.append
+    )  # Micro-optimization to avoid attribute lookup in loop
+
     for variable in variables:
         if isinstance(variable, VariableContext):
-            if _is_private_variable := variable.name.startswith("_"):
+            # Check for private variable (starts with "_")
+            if variable.name.startswith("_"):
                 continue
-            variable_info += f"- variable: `{variable.name}`\n"
-            variable_info += f"  - value_type: {variable.value_type}\n"
-            variable_info += f"  - value_preview: {variable.preview_value}\n"
+            append(f"- variable: `{variable.name}`\n")
+            append(f"  - value_type: {variable.value_type}\n")
+            append(f"  - value_preview: {variable.preview_value}\n")
         else:
-            if _is_private_variable := variable.startswith("_"):
+            # variable is a str
+            if variable.startswith("_"):
                 continue
-            variable_info += f"- variable: `{variable}`"
+            append(f"- variable: `{variable}`")
 
-    return variable_info
+    return "".join(lines)
 
 
 def _rules(rules: list[str]) -> str:
