@@ -135,6 +135,8 @@ def is_url(value: str, public: bool = False) -> bool:
     if not public:
         return result is not None
 
-    return result is not None and not any(
-        result.groupdict().get(key) for key in ("private_ip", "private_host")
+    # Use a generator expression for minimal overhead
+    return result is not None and not (
+        result.groupdict().get("private_ip")
+        or result.groupdict().get("private_host")
     )
