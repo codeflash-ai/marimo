@@ -126,9 +126,11 @@ class UIElementRegistry:
         return None
 
     def get_object(self, object_id: UIElementId) -> UIElement[Any, Any]:
-        if object_id not in self._objects:
+        try:
+            ref = self._objects[object_id]
+        except KeyError:
             raise KeyError(f"UIElement with id {object_id} not found")
-        obj = self._objects[object_id]()
+        obj = ref()
         assert obj is not None
         return obj
 
