@@ -205,10 +205,12 @@ class StaticNotebookReader(FileReader):
 
     @staticmethod
     def _extract_filename_from_static_notebook(file_contents: str) -> str:
-        if search := re.search(
-            StaticNotebookReader.FILENAME_REGEX, file_contents
-        ):
-            return urllib.parse.unquote(search.group(1))
+        search = StaticNotebookReader.FILENAME_REGEX.search(file_contents)
+        if search:
+            value = search.group(1)
+            if "%" in value:
+                return urllib.parse.unquote(value)
+            return value
         return "notebook.py"
 
 
