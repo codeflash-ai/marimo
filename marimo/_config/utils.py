@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from collections import deque
 from functools import lru_cache
 from typing import Any, Optional
 
@@ -113,8 +114,43 @@ def get_user_config_path() -> Optional[str]:
 
 
 def deep_copy(obj: Any) -> Any:
+    # Fast-path for dict and list using iterative DFS to avoid deep recursion and repeated function call overhead
     if isinstance(obj, dict):
-        return {k: deep_copy(v) for k, v in obj.items()}  # type: ignore
+        stack = deque()
+        result = {}
+        stack.append((obj, result))
+        while stack:
+            curr_src, curr_dst = stack.pop()
+            for k, v in curr_src.items():
+                if isinstance(v, dict):
+                    new_dict = {}
+                    curr_dst[k] = new_dict
+                    stack.append((v, new_dict))
+                elif isinstance(v, list):
+                    new_list = []
+                    curr_dst[k] = new_list
+                    stack.append((v, new_list))
+                else:
+                    curr_dst[k] = v
+        return result
+
     if isinstance(obj, list):
-        return [deep_copy(v) for v in obj]  # type: ignore
+        stack = deque()
+        result = []
+        stack.append((obj, result))
+        while stack:
+            curr_src, curr_dst = stack.pop()
+            for v in curr_src:
+                if isinstance(v, dict):
+                    new_dict = {}
+                    curr_dst.append(new_dict)
+                    stack.append((v, new_dict))
+                elif isinstance(v, list):
+                    new_list = []
+                    curr_dst.append(new_list)
+                    stack.append((v, new_list))
+                else:
+                    curr_dst.append(v)
+        return result
+
     return obj

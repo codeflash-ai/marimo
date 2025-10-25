@@ -29,5 +29,5 @@ def deep_merge(
     """Deep merge of two dicts."""
     return {
         key: _merge_key(original, update, key)
-        for key in set(original.keys()).union(set(update.keys()))
+        for key in original.keys() | update.keys()
     }
