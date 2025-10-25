@@ -214,7 +214,19 @@ class StaticNotebookReader(FileReader):
 
 class GitHubSourceReader(FileReader):
     def can_read(self, name: str) -> bool:
-        return is_github_src(name, ext=".py") or is_github_src(name, ext=".md")
+        # Avoid double url parse by combining both extensions in one pass
+        if not is_url(name):
+            return False
+
+        parsed = urllib.parse.urlparse(name)
+        hostname = parsed.hostname
+        if (
+            hostname != "github.com"
+            and hostname != "raw.githubusercontent.com"
+        ):
+            return False
+        path = parsed.path
+        return path.endswith(".py") or path.endswith(".md")
 
     def read(self, name: str) -> tuple[str, str]:
         url = get_github_src_url(name)
