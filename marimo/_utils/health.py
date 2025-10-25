@@ -97,19 +97,24 @@ def _get_versions(
 
 def get_chrome_version() -> Optional[str]:
     def get_chrome_version_windows() -> Optional[str]:
-        process = subprocess.Popen(
-            [
-                "reg",
-                "query",
-                "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\BLBeacon",
-                "/v",
-                "version",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        stdout, stderr = communicate_with_timeout(process)
+        # Pre-create args list for efficiency/readability
+        args = [
+            "reg",
+            "query",
+            "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\BLBeacon",
+            "/v",
+            "version",
+        ]
+        try:
+            process = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            stdout, stderr = communicate_with_timeout(process)
+        except Exception:
+            return None
         if stderr:
             return None
         parts = stdout.strip().split()
@@ -118,16 +123,20 @@ def get_chrome_version() -> Optional[str]:
         return None
 
     def get_chrome_version_mac() -> Optional[str]:
-        process = subprocess.Popen(
-            [
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                "--version",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        stdout, stderr = communicate_with_timeout(process)
+        args = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "--version",
+        ]
+        try:
+            process = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            stdout, stderr = communicate_with_timeout(process)
+        except Exception:
+            return None
         if stderr:
             return None
         parts = stdout.strip().split()
@@ -136,13 +145,17 @@ def get_chrome_version() -> Optional[str]:
         return None
 
     def get_chrome_version_linux() -> Optional[str]:
-        process = subprocess.Popen(
-            ["google-chrome", "--version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        stdout, stderr = communicate_with_timeout(process)
+        args = ["google-chrome", "--version"]
+        try:
+            process = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            stdout, stderr = communicate_with_timeout(process)
+        except Exception:
+            return None
         if stderr:
             return None
         parts = stdout.strip().split()
@@ -151,11 +164,13 @@ def get_chrome_version() -> Optional[str]:
         return None
 
     try:
-        if sys.platform.startswith("win32"):
+        plat = sys.platform
+        # Use equality for win32 as 'win32' is the only value on Windows
+        if plat == "win32":
             return get_chrome_version_windows()
-        elif sys.platform.startswith("darwin"):
+        elif plat == "darwin":
             return get_chrome_version_mac()
-        elif sys.platform.startswith("linux"):
+        elif plat.startswith("linux"):
             return get_chrome_version_linux()
         else:
             return None
@@ -178,3 +193,12 @@ def communicate_with_timeout(
     except subprocess.TimeoutExpired:
         process.kill()
         return "", "Error: Process timed out"
+
+
+def communicate_with_timeout(process: subprocess.Popen) -> tuple[str, str]:
+    try:
+        stdout, stderr = process.communicate(timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        stdout, stderr = process.communicate()
+    return stdout, stderr
