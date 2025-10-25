@@ -14,7 +14,7 @@ import threading
 import time
 import traceback
 from copy import copy
-from functools import cached_property
+from functools import cached_property, lru_cache
 from multiprocessing import connection
 from pathlib import Path
 from typing import (
@@ -391,15 +391,19 @@ def notebook_dir() -> pathlib.Path | None:
     except ContextNotInitializedError:
         # If we are not running in a notebook (e.g. exported to Jupyter),
         # return the current working directory
-        return pathlib.Path().absolute()
+        return _cached_absolute_path()
 
     # NB: __file__ is patched by runner, so always bound to be correct.
     filename = ctx.globals.get("__file__", None) or ctx.filename
     if filename is not None:
         path = pathlib.Path(filename).resolve()
-        while not path.is_dir():
-            path = path.parent
-        return path
+        # Early exit if path is already a directory
+        if path.is_dir():
+            return path
+        # Walk up the parents until a directory is found (avoids repeated disk I/O if possible)
+        for parent in path.parents:
+            if parent.is_dir():
+                return parent
 
     return None
 
@@ -442,15 +446,21 @@ def notebook_location() -> pathlib.PurePath | None:
             notebook, or None if the notebook's directory cannot be determined.
     """
     if is_pyodide():
+        # Import js.location only once per call
         from js import location  # type: ignore
 
-        path_location = pathlib.Path(str(location))
-        # The location looks like https://marimo-team.github.io/marimo-gh-pages-template/notebooks/assets/worker-BxJ8HeOy.js
-        # We want to crawl out of the assets/ folder
-        if "assets" in path_location.parts:
-            return URLPath(str(path_location.parent.parent))
-        return URLPath(str(path_location))
+        location_str = str(location)
+        path_location = pathlib.Path(location_str)
+        assets_present = "assets" in path_location.parts
+        # Precompute parent and parent.parent strings
+        parent_str = str(path_location.parent) if assets_present else ""
+        parent_parent_str = (
+            str(path_location.parent.parent) if assets_present else ""
+        )
 
+        return _cached_urlpath_for_location(
+            location_str, assets_present, parent_str, parent_parent_str
+        )
     else:
         return notebook_dir()
 
@@ -3196,3 +3206,23 @@ def launch_kernel(
     kernel.teardown()
     if isinstance(pipe, connection.Connection):
         pipe.close()
+
+
+@lru_cache(maxsize=1)
+def _cached_absolute_path() -> pathlib.Path:
+    return pathlib.Path().absolute()
+
+
+# Caching for notebook_location only in Pyodide context, based on location string.
+@lru_cache(maxsize=8)
+def _cached_urlpath_for_location(
+    location_str: str,
+    assets_present: bool,
+    parent_str: str,
+    parent_parent_str: str,
+) -> URLPath:
+    # Used only in Pyodide case
+    if assets_present:
+        return URLPath(parent_parent_str)
+    else:
+        return URLPath(location_str)
