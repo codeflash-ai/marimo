@@ -17,31 +17,65 @@ def mask_secrets_partial(config: PartialMarimoConfig) -> PartialMarimoConfig:
 
 def mask_secrets(config: MarimoConfig) -> MarimoConfig:
     def deep_remove_from_path(path: list[str], obj: dict[str, Any]) -> None:
-        if not path:
-            return
-
-        key = path[0]
-        remaining_path = path[1:]
-
-        if key == "*":
-            for v in obj.values():
-                if isinstance(v, dict):
-                    deep_remove_from_path(remaining_path, v)
-                elif isinstance(v, list) and remaining_path:
-                    # Only first layer recursion
-                    for item in v:
-                        if isinstance(item, dict):
-                            deep_remove_from_path(remaining_path, item)
-            return
-        if key not in obj:
-            return
-        if len(path) == 1:
-            if isinstance(obj[key], list):
-                obj[key] = []
-            elif obj[key]:
-                obj[key] = SECRET_PLACEHOLDER
-        else:
-            deep_remove_from_path(remaining_path, obj[key])
+        """Mutate obj in-place to mask secrets at the specified path."""
+        idx = 0
+        length = len(path)
+        cur_obj = obj
+        while idx < length:
+            key = path[idx]
+            if key == "*":
+                # Instead of recursion, we process all values one by one here to reduce Python stack overhead.
+                next_path = path[idx + 1 :]
+                if not next_path:
+                    return
+                for v in cur_obj.values():
+                    if isinstance(v, dict):
+                        # inline loop for next level to avoid extra per-call function setup
+                        nxt_obj = v
+                        nxt_idx = 0
+                        nxt_length = len(next_path)
+                        while nxt_idx < nxt_length:
+                            nxt_key = next_path[nxt_idx]
+                            if nxt_key == "*":
+                                nn_path = next_path[nxt_idx + 1 :]
+                                if not nn_path:
+                                    break
+                                for nv in nxt_obj.values():
+                                    if isinstance(nv, dict):
+                                        deep_remove_from_path(nn_path, nv)
+                                    elif isinstance(nv, list) and nn_path:
+                                        for nitem in nv:
+                                            if isinstance(nitem, dict):
+                                                deep_remove_from_path(
+                                                    nn_path, nitem
+                                                )
+                                break
+                            if nxt_key not in nxt_obj:
+                                break
+                            if nxt_idx == nxt_length - 1:
+                                if isinstance(nxt_obj[nxt_key], list):
+                                    nxt_obj[nxt_key] = []
+                                elif nxt_obj[nxt_key]:
+                                    nxt_obj[nxt_key] = SECRET_PLACEHOLDER
+                                break
+                            nxt_obj = nxt_obj[nxt_key]
+                            nxt_idx += 1
+                    elif isinstance(v, list) and idx + 1 < length:
+                        # Only first layer recursion for lists
+                        for item in v:
+                            if isinstance(item, dict):
+                                deep_remove_from_path(path[idx + 1 :], item)
+                return
+            if key not in cur_obj:
+                return
+            if idx == length - 1:
+                if isinstance(cur_obj[key], list):
+                    cur_obj[key] = []
+                elif cur_obj[key]:
+                    cur_obj[key] = SECRET_PLACEHOLDER
+                return
+            cur_obj = cur_obj[key]
+            idx += 1
 
     secrets = (
         ("ai", "*", "api_key"),
