@@ -19,9 +19,11 @@ def _get_providers(
     providers: list[SecretProvider] = [EnvSecretsProvider(original_environ)]
 
     # Add dotenv providers
-    dotenvs: list[str] = config.get("runtime", {}).get("dotenv", [])
-    if dotenvs and isinstance(dotenvs, list):
-        providers.extend(DotEnvSecretsProvider(dotenv) for dotenv in dotenvs)
+    runtime = config.get("runtime")
+    if runtime:
+        dotenvs = runtime.get("dotenv")
+        if dotenvs and isinstance(dotenvs, list):
+            providers.extend(map(DotEnvSecretsProvider, dotenvs))
 
     return providers
 
