@@ -45,6 +45,12 @@ from marimo._schemas.serialization import (
     NotebookSerializationV1,
 )
 
+LEGACY_PYTHON_REGEX = re.compile(r"\{.*python.*\}")
+
+LEGACY_SQL_REGEX = re.compile(r"\{.*sql.*\}")
+
+MARIMO_REGEX = re.compile(r".*\{.*marimo.*\}")
+
 LOGGER = _loggers.marimo_logger()
 
 MARIMO_MD = "marimo-md"
@@ -77,12 +83,13 @@ def extract_attribs(
 
 def _is_code_tag(text: str) -> bool:
     head = text.split("\n")[0].strip()
-    legacy_format = bool(re.search(r"\{.*python.*\}", head))
-    legacy_format |= bool(re.search(r"\{.*sql.*\}", head))
+    # Fast legacy check by precompiled regexes
+    if LEGACY_PYTHON_REGEX.search(head) or LEGACY_SQL_REGEX.search(head):
+        return True
+    # If code is compatible and dependency met, check marimo pattern
     if DependencyManager.new_superfences.has_required_version(quiet=True):
-        supported_format = bool(re.search(r".*\{.*marimo.*\}", head))
-        return legacy_format or supported_format
-    return legacy_format
+        return bool(MARIMO_REGEX.search(head))
+    return False
 
 
 def _get_language(text: str) -> str:
