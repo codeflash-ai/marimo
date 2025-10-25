@@ -153,8 +153,17 @@ class StaticNotebookReader(FileReader):
 
     def read(self, name: str) -> tuple[str, str]:
         _, file_contents = self._is_static_marimo_notebook_url(name)
-        code = self._extract_code_from_static_notebook(file_contents)
-        filename = self._extract_filename_from_static_notebook(file_contents)
+        # Avoid repeated regex search when both code and filename needed
+        code_match = self.CODE_REGEX.search(file_contents)
+        assert code_match is not None, (
+            "<marimo-code> not found in file contents"
+        )
+        code = urllib.parse.unquote(code_match.group(1))
+        filename_match = self.FILENAME_REGEX.search(file_contents)
+        if filename_match:
+            filename = urllib.parse.unquote(filename_match.group(1))
+        else:
+            filename = "notebook.py"
         return code, filename
 
     @staticmethod
