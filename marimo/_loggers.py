@@ -13,6 +13,15 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
     from pathlib import Path
 
+_LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARN": logging.WARNING,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
 # This file manages and creates loggers used throughout marimo.
 #
 # It contains a global log level, which can be updated and all handlers
@@ -43,18 +52,8 @@ _LOGGERS: dict[str, logging.Logger] = {}
 
 def log_level_string_to_int(level: str) -> int:
     level = level.upper()
-    if level == "DEBUG":
-        return logging.DEBUG
-    elif level == "INFO":
-        return logging.INFO
-    elif level == "WARN":
-        return logging.WARNING
-    elif level == "WARNING":
-        return logging.WARNING
-    elif level == "ERROR":
-        return logging.ERROR
-    elif level == "CRITICAL":
-        return logging.CRITICAL
+    if level in _LOG_LEVELS:
+        return _LOG_LEVELS[level]
     else:
         raise ValueError(f"Unrecognized log level {level}")
 
