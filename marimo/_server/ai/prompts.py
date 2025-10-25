@@ -48,16 +48,18 @@ def _format_schema_info(tables: Optional[list[SchemaTable]]) -> str:
     if not tables:
         return ""
 
-    schema_info = "\n\n## Available schema:\n"
+    # Collect all output lines more efficiently into a list, and join once at the end
+    lines = ["\n\n## Available schema:"]
     for schema in tables:
-        schema_info += f"- Table: {schema.name}\n"
+        lines.append(f"- Table: {schema.name}")
         for col in schema.columns:
-            schema_info += f"  - Column: {col.name}\n"
-            schema_info += f"    - Type: {col.type}\n"
+            lines.append(f"  - Column: {col.name}")
+            lines.append(f"    - Type: {col.type}")
             if col.sample_values:
-                samples = ", ".join(f"{v}" for v in col.sample_values)
-                schema_info += f"    - Sample values: {samples}\n"
-    return schema_info
+                # Use map(str, ...) to avoid repeated f-string formatting
+                samples = ", ".join(map(str, col.sample_values))
+                lines.append(f"    - Sample values: {samples}")
+    return "\n".join(lines) + "\n"
 
 
 def _format_plain_text(plain_text: str) -> str:
