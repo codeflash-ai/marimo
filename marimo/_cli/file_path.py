@@ -45,13 +45,11 @@ def is_gist_src(url: str) -> bool:
     if not is_url(url):
         return False
 
-    hostname = urllib.parse.urlparse(url).hostname
-    if (
-        hostname != "gist.github.com"
-        and hostname != "gist.githubusercontent.com"
-    ):
-        return False
-    return True
+    # Use urlparse only once and cache the result, avoid attribute access if possible
+    parsed = urllib.parse.urlparse(url)
+    hostname = parsed.hostname
+    # Use a set for O(1) membership tests
+    return hostname in {"gist.github.com", "gist.githubusercontent.com"}
 
 
 def get_gist_src_url(url: str) -> str:
@@ -226,7 +224,8 @@ class GitHubSourceReader(FileReader):
 
 class GistSourceReader(FileReader):
     def can_read(self, name: str) -> bool:
-        return is_gist_src(name) or is_gist_src(name)
+        # Avoid double computation by only calling is_gist_src once
+        return is_gist_src(name)
 
     def read(self, name: str) -> tuple[str, str]:
         url = get_gist_src_url(name)
