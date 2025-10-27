@@ -235,29 +235,37 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def search(self, query: str) -> DefaultTableManager:
         query = query.lower()
         if isinstance(self.data, dict) and self.is_column_oriented:
-            mask: list[bool] = [
-                any(
-                    query in str(cast(list[Any], self.data[key])[row]).lower()
-                    for key in self.data.keys()
-                )
-                for row in range(self.get_num_rows() or 0)
-            ]
+            data = self.data
+            keys = list(data.keys())
+            values_lists = [cast(list[Any], data[key]) for key in keys]
+            num_rows = self.get_num_rows() or 0
+
+            # Preallocate mask for rows
+            mask = [False] * num_rows
+            for i in range(num_rows):
+                # Use generator to short-circuit on first match
+                for col_vals in values_lists:
+                    val = col_vals[i]
+                    if query in str(val).lower():
+                        mask[i] = True
+                        break
+
+            # Only build results for rows where mask[i] is True
             results = {
-                key: [
-                    cast(list[Any], value)[i]
-                    for i, match in enumerate(mask)
-                    if match
-                ]
-                for key, value in self.data.items()
+                key: [col_vals[i] for i, match in enumerate(mask) if match]
+                for key, col_vals in zip(keys, values_lists)
             }
             return DefaultTableManager(cast(JsonTableData, results))
-        return DefaultTableManager(
-            [
+        else:
+            # Normalize once outside list comprehension to avoid repeated normalization
+            norm_data = self._normalize_data(self.data)
+            # Use generator expression with any for early exit
+            filtered = [
                 row
-                for row in self._normalize_data(self.data)
+                for row in norm_data
                 if any(query in str(v).lower() for v in row.values())
             ]
-        )
+            return DefaultTableManager(filtered)
 
     def get_row_headers(self) -> FieldTypes:
         return []
@@ -337,13 +345,14 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
     def get_num_rows(self, force: bool = True) -> int:
         del force
-        if isinstance(self.data, dict):
+        data = self.data
+        if isinstance(data, dict):
             if self.is_column_oriented:
-                first = next(iter(self.data.values()), None)
+                first = next(iter(data.values()), None)
                 return len(cast(list[Any], first))
             else:
-                return len(self.data)
-        return len(self.data)
+                return len(data)
+        return len(data)
 
     def get_num_columns(self) -> int:
         return len(self.data) if isinstance(self.data, dict) else 1
@@ -451,12 +460,10 @@ class DefaultTableManager(TableManager[JsonTableData]):
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
         if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
-            column_values = data.values()
             column_names = list(data.keys())
+            # Use tuple() to avoid repeated conversion inside zip
+            column_values = tuple(data.values())
+            # Use list comprehension efficiently with zip
             return [
                 dict(zip(column_names, row_values))
                 for row_values in zip(*column_values)
@@ -466,7 +473,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if isinstance(data, dict):
             return [{KEY: key, VALUE: value} for key, value in data.items()]
 
-        # Assert that data is a list
+        # Assert that data is a list or tuple
         if not isinstance(data, (list, tuple)):
             raise ValueError(
                 "data must be a list or tuple or a dict of lists."
@@ -477,17 +484,17 @@ class DefaultTableManager(TableManager[JsonTableData]):
             return []
 
         # Handle single-column data
-        if not isinstance(data[0], dict):
-            if not isinstance(data[0], (str, int, float, bool, type(None))):
+        first_elem = data[0]
+        if not isinstance(first_elem, dict):
+            if not isinstance(first_elem, (str, int, float, bool, type(None))):
                 raise ValueError(
                     "data must be a sequence of JSON-serializable types, or a "
                     "sequence of dicts."
                 )
-
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
             casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
+            # List comp on casted, avoids repeated attribute lookups
             return [{"value": datum} for datum in casted]
+
         # Sequence of dicts
         return cast(list[dict[str, Any]], data)
 
