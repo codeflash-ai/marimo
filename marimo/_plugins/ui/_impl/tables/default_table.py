@@ -228,7 +228,7 @@ class DefaultTableManager(TableManager[JsonTableData]):
                     )
                 )
             return DefaultTableManager(
-                self._normalize_data(self.data)[offset : offset + count]
+                self._normalize_data_slice(self.data, offset, count)
             )
         return DefaultTableManager(self.data[offset : offset + count])
 
@@ -490,6 +490,26 @@ class DefaultTableManager(TableManager[JsonTableData]):
             return [{"value": datum} for datum in casted]
         # Sequence of dicts
         return cast(list[dict[str, Any]], data)
+
+    @staticmethod
+    def _normalize_data_slice(
+        data: JsonTableData, offset: int, count: int
+    ) -> list[dict[str, Any]]:
+        # Fast slice for key-value pairs: only build what is needed
+        # This method avoids building all normalized data, then slicing,
+        # which saves time and memory for large dicts when small slices are needed.
+        # This logic only applies to key-value (not column-major) dicts.
+        # We cannot optimize _normalize_data column-major path, as output "rows" order is not specified.
+        # We inline the inner listcomp with enumerate for early stop.
+        k, v = KEY, VALUE
+        result = []
+        # Avoid .items() conversion to list if offset > 0 or small count
+        for idx, (key, value) in enumerate(data.items()):  # type: ignore
+            if idx >= offset + count:
+                break
+            if idx >= offset:
+                result.append({k: key, v: value})
+        return result
 
 
 def _is_column_oriented(data: JsonTableData) -> bool:
