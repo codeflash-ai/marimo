@@ -14,6 +14,7 @@ from marimo._ast.parse import (
     is_non_marimo_python_script,
     parse_notebook,
 )
+from marimo._convert.markdown.markdown import convert_from_md_to_marimo_ir
 from marimo._schemas.serialization import NotebookSerialization, UnparsableCell
 
 LOGGER = _loggers.marimo_logger()
@@ -158,14 +159,10 @@ def get_notebook_status(filename: str) -> LoadResult:
         return LoadResult(status="empty", contents=contents)
 
     notebook: Optional[NotebookSerialization] = None
-    if path.suffix in (".md", ".qmd"):
-        from marimo._convert.markdown.markdown import (
-            convert_from_md_to_marimo_ir,
-        )
-
-        notebook = convert_from_md_to_marimo_ir(contents)
-    elif path.suffix == ".py":
+    if path.suffix == ".py":
         notebook = parse_notebook(contents, filepath=filename)
+    elif path.suffix in (".md", ".qmd"):
+        notebook = convert_from_md_to_marimo_ir(contents)
     else:
         raise MarimoFileError("File must end with .py, .md, or .qmd.")
 
