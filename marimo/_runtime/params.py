@@ -76,7 +76,7 @@ class QueryParams(State[SerializedQueryParams]):
         value = self._params.get(key)
         if value is None:
             return []
-        if isinstance(value, list):
+        if type(value) is list:
             return value
         return [value]
 
