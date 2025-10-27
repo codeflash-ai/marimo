@@ -54,6 +54,17 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def __init__(self, data: JsonTableData):
         self.data = data
         self.is_column_oriented = _is_column_oriented(data)
+        # Precompute possible column names for dict data
+        if isinstance(self.data, dict):
+            if not self.is_column_oriented:
+                self._column_names = [KEY, VALUE]
+            else:
+                # keys() returns a view, so convert once to list for reuse
+                self._column_names = list(self.data.keys())
+        else:
+            self._column_names = (
+                None  # Will be determined on demand for non-dicts
+            )
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -349,11 +360,15 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return len(self.data) if isinstance(self.data, dict) else 1
 
     def get_column_names(self) -> list[str]:
-        if isinstance(self.data, dict):
-            if not self.is_column_oriented:
-                return [KEY, VALUE]
-            return list(self.data.keys())
-        first = next(iter(self.data), None)
+        if self._column_names is not None:
+            return self._column_names
+        # For non-dict data, only compute first element and check if it's a dict
+        iterator = iter(self.data)
+        try:
+            first = next(iterator)
+        except StopIteration:
+            # If data is empty, fallback to ["value"], as in original contract
+            return ["value"]
         return list(first.keys()) if isinstance(first, dict) else ["value"]
 
     def get_unique_column_values(self, column: str) -> list[str | int | float]:
