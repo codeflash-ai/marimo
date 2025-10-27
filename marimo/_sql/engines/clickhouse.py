@@ -47,7 +47,7 @@ class ClickhouseEmbedded(SQLConnection[Optional["ChdbConnection"]]):
         engine_name: Optional[VariableName] = None,
     ) -> None:
         super().__init__(connection, engine_name)
-        self._cursor = None if connection is None else connection.cursor()
+        self._cursor = connection and connection.cursor()
 
     @property
     def source(self) -> str:
@@ -152,7 +152,6 @@ class ClickhouseEmbedded(SQLConnection[Optional["ChdbConnection"]]):
         self, *, database: str, schema: str, include_table_details: bool
     ) -> list[DataTable]:
         """Return all tables in a schema."""
-        _, _, _ = database, schema, include_table_details
         return []
 
     def get_table_details(
