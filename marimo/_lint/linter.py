@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
     from marimo._lint.rules.base import LintRule
 
+_pattern = re.compile(r"^__generated_with = .*$", re.MULTILINE)
+
 
 def _contents_differ_excluding_generated_with(
     original: str, generated: str
@@ -32,12 +34,9 @@ def _contents_differ_excluding_generated_with(
     This prevents unnecessary file writes when only the __generated_with
     version metadata differs between the original and generated content.
     """
-    # Regex to match the __generated_with line
-    pattern = r"^__generated_with = .*$"
-
     # Remove __generated_with lines from both contents
-    orig_cleaned = re.sub(pattern, "", original, flags=re.MULTILINE).strip()
-    gen_cleaned = re.sub(pattern, "", generated, flags=re.MULTILINE).strip()
+    orig_cleaned = _pattern.sub("", original).strip()
+    gen_cleaned = _pattern.sub("", generated).strip()
 
     return orig_cleaned != gen_cleaned
 
