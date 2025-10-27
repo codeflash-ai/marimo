@@ -96,7 +96,17 @@ class QueryParams(State[SerializedQueryParams]):
         return f"QueryParams({self._params})"
 
     def __str__(self) -> str:
-        return str(self._params)
+        # Fast path for common cases; avoids unnecessary type checking in `str(dict)`
+        params = self._params
+        if not params:
+            return "{}"
+        if all(isinstance(v, str) for v in params.values()):
+            # All values are strings: build a string directly
+            # Using join for perf; key order is preserved as in original dict
+            items = (f"{repr(k)}: {repr(v)}" for k, v in params.items())
+            return "{" + ", ".join(items) + "}"
+        # else, fall back to default for mixed/complex cases
+        return str(params)
 
     def __setitem__(self, key: str, value: Union[str, list[str]]) -> None:
         if value is None or value == []:  # type: ignore
