@@ -300,7 +300,6 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def get_field_type(
         self, column_name: str
     ) -> tuple[FieldType, ExternalDataType]:
-        del column_name
         return ("unknown", "object")
 
     # By default, don't provide any field types
