@@ -145,7 +145,7 @@ class ClickhouseEmbedded(SQLConnection[Optional["ChdbConnection"]]):
         include_tables: Union[bool, Literal["auto"]],
         include_table_details: Union[bool, Literal["auto"]],
     ) -> list[Database]:
-        _, _, _ = include_schemas, include_tables, include_table_details
+        # No need to assign to unused variables, just return []
         return []
 
     def get_tables_in_schema(
