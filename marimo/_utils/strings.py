@@ -5,6 +5,8 @@ import re
 
 from marimo._utils.platform import is_windows
 
+_REGEX_TRAILING_BACKSLASHES = re.compile(r"(\\+)$")
+
 cmd_meta = r"([\"\^\&\|\<\>\(\)\%\!])"
 cmd_meta_or_space = r"[\s\"\^\&\|\<\>\(\)\%\!]"
 cmd_meta_inside_quotes = r"([\"\%\!])"
@@ -19,7 +21,7 @@ def _wrap_in_quotes(s: str) -> str:
     This handles adding the correct number of backslashes in front of the
     closing quote.
     """
-    return '"' + re.sub(r"(\\+)$", r"\1\1", s) + '"'
+    return '"' + _REGEX_TRAILING_BACKSLASHES.sub(r"\1\1", s) + '"'
 
 
 def _quote_for_cmd(s: str) -> str:
