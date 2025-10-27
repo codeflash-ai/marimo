@@ -1,10 +1,17 @@
 # Copyright 2025 Marimo. All rights reserved.
 
+import re
 from typing import Literal, Optional, Union
 
 from marimo import _loggers
 from marimo._dependencies.dependencies import DependencyManager
 from marimo._sql.error_utils import log_sql_error
+
+_DDL_RE = re.compile(r"^\s*(CREATE|DROP|ALTER|ATTACH|DETACH)\b", re.IGNORECASE)
+
+_DML_RE = re.compile(r"^\s*(INSERT|UPDATE|DELETE)\b", re.IGNORECASE)
+
+_DQL_RE = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
 
 LOGGER = _loggers.marimo_logger()
 
@@ -24,18 +31,25 @@ def classify_sql_statement(
     """
     Identifies whether a SQL statement is a DDL, DML, or DQL statement.
     """
+    # Fast path: check for common SQL keywords before expensive parsing
+    if _DDL_RE.match(sql_statement):
+        return "DDL"
+    if _DML_RE.match(sql_statement):
+        return "DML"
+    if _DQL_RE.match(sql_statement):
+        return "DQL"
+
     DependencyManager.sqlglot.require(why="SQL parsing")
 
     from sqlglot import exp, parse
     from sqlglot.errors import ParseError
 
-    sql_statement = sql_statement.strip().lower()
     try:
         with _loggers.suppress_warnings_logs("sqlglot"):
             expression_list = parse(sql_statement, dialect=dialect)
     except ParseError as e:
         log_sql_error(
-            LOGGER.debug,
+            _loggers.marimo_logger().debug,
             message="Failed to parse SQL statement for classification.",
             exception=e,
             rule_code="MF005",
