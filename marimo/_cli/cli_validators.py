@@ -6,18 +6,16 @@ import click
 
 
 def base_url(ctx: Any, param: Any, value: Optional[str]) -> str:
-    del ctx
-    del param
-    if value is None or value == "":
+    if not value:
         return ""
 
     if value == "/":
         raise click.BadParameter(
             "Must not be /. This is equivalent to not setting the base URL."
         )
-    if not value.startswith("/"):
+    if value[0] != "/":
         raise click.BadParameter("Must start with /")
-    if value.endswith("/"):
+    if value[-1] == "/":
         raise click.BadParameter("Must not end with /")
     return value
 
