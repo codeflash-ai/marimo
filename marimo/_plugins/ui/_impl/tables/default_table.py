@@ -54,6 +54,24 @@ class DefaultTableManager(TableManager[JsonTableData]):
     def __init__(self, data: JsonTableData):
         self.data = data
         self.is_column_oriented = _is_column_oriented(data)
+        self._table_manager: TableManager[Any] | None = None
+
+        self._using_pandas = DependencyManager.pandas.has()
+        self._using_polars = (
+            not self._using_pandas and DependencyManager.polars.has()
+        )
+
+        if self._using_pandas:
+            import pandas as pd
+
+            self._pd = pd
+        elif self._using_polars:
+            import polars as pl
+
+            self._pl = pl
+        else:
+            self._pd = None
+            self._pl = None
 
     def supports_download(self) -> bool:
         # If we have pandas/polars/pyarrow, we can convert to CSV or JSON
@@ -309,21 +327,28 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return []
 
     def _as_table_manager(self) -> TableManager[Any]:
-        if DependencyManager.pandas.has():
-            import pandas as pd
+        if self._table_manager is not None:
+            return self._table_manager
 
-            return PandasTableManagerFactory.create()(pd.DataFrame(self.data))
-        if DependencyManager.polars.has():
-            import polars as pl
+        if self._using_pandas:
+            # Already imported in __init__
+            pd = self._pd  # type: ignore
+            self._table_manager = PandasTableManagerFactory.create()(
+                pd.DataFrame(self.data)
+            )
+            return self._table_manager
 
+        if self._using_polars:
+            pl = self._pl  # type: ignore
             if isinstance(self.data, dict) and not self.is_column_oriented:
-                return PolarsTableManagerFactory.create()(
+                self._table_manager = PolarsTableManagerFactory.create()(
                     pl.DataFrame(self._normalize_data(self.data))
                 )
-
-            return PolarsTableManagerFactory.create()(
-                pl.DataFrame(cast(Any, self.data))
-            )
+            else:
+                self._table_manager = PolarsTableManagerFactory.create()(
+                    pl.DataFrame(cast(Any, self.data))
+                )
+            return self._table_manager
 
         raise ValueError("No supported table libraries found.")
 
