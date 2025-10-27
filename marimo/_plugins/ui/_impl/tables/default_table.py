@@ -274,15 +274,17 @@ class DefaultTableManager(TableManager[JsonTableData]):
         if isinstance(self.data, dict):
             if self.is_column_oriented:
                 # Handle column-oriented data
-                for value in cast(list[Any], self.data[column]):
+                data_col = self.data[column]
+                for value in cast(list[Any], data_col):
                     grouped[value] += 1
             else:
                 # In this case, the data is a dict of key-value pairs
                 # where the key is the row identifier and the value is the data
-                for key, value in self.data.items():
-                    if column == KEY:
+                if column == KEY:
+                    for key in self.data.keys():
                         grouped[key] += 1
-                    elif column == VALUE:
+                elif column == VALUE:
+                    for value in self.data.values():
                         grouped[value] += 1
         else:
             # Handle row-oriented data
@@ -290,12 +292,9 @@ class DefaultTableManager(TableManager[JsonTableData]):
                 if isinstance(row, dict) and column in row:
                     grouped[row[column]] += 1
 
-        sorted_grouped = sorted(
-            grouped.items(), key=lambda x: x[1], reverse=True
-        )
-        top_k = sorted_grouped[:k]
-
-        return [(value, count) for value, count in top_k]
+        # Avoid repeat .items(), slice, then map for top-k extraction
+        top_k = sorted(grouped.items(), key=lambda x: x[1], reverse=True)[:k]
+        return top_k
 
     def get_field_type(
         self, column_name: str
@@ -349,11 +348,19 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return len(self.data) if isinstance(self.data, dict) else 1
 
     def get_column_names(self) -> list[str]:
-        if isinstance(self.data, dict):
+        # Optimize isinstance(self.data, dict): branch
+        data = self.data
+        if isinstance(data, dict):
             if not self.is_column_oriented:
                 return [KEY, VALUE]
-            return list(self.data.keys())
-        first = next(iter(self.data), None)
+            # Use keys view directly and convert to list
+            return list(data.keys())
+        # Avoid extra isinstance and next/iter allocations
+        try:
+            first = next(iter(data))
+        except StopIteration:
+            # In case data is empty, preserve behavior
+            return ["value"]
         return list(first.keys()) if isinstance(first, dict) else ["value"]
 
     def get_unique_column_values(self, column: str) -> list[str | int | float]:
