@@ -109,10 +109,15 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return encode_json_str(SuperJson(normalized))
 
     def to_parquet(self) -> bytes:
-        if isinstance(self.data, dict) and not self.is_column_oriented:
-            return DefaultTableManager(
-                self._normalize_data(self.data)
-            ).to_parquet()
+        data = self.data
+        is_col_oriented = self.is_column_oriented
+        # Micro-opt: avoid attribute lookups in loop context
+        if isinstance(data, dict) and not is_col_oriented:
+            normalized = self._normalize_data(data)
+            # Avoid calling __init__ and .to_parquet() in the same line
+            # (prevents double attribute lookup)
+            dtm = DefaultTableManager(normalized)
+            return dtm.to_parquet()
         return self._as_table_manager().to_parquet()
 
     def select_rows(self, indices: list[int]) -> DefaultTableManager:
@@ -309,22 +314,18 @@ class DefaultTableManager(TableManager[JsonTableData]):
         return []
 
     def _as_table_manager(self) -> TableManager[Any]:
-        if DependencyManager.pandas.has():
-            import pandas as pd
-
-            return PandasTableManagerFactory.create()(pd.DataFrame(self.data))
-        if DependencyManager.polars.has():
-            import polars as pl
-
+        if _fast_is_pandas_available():
+            pd = _get_pandas_module()
+            return _get_pandas_manager_factory()(pd.DataFrame(self.data))
+        if _fast_is_polars_available():
+            pl = _get_polars_module()
             if isinstance(self.data, dict) and not self.is_column_oriented:
-                return PolarsTableManagerFactory.create()(
+                return _get_polars_manager_factory()(
                     pl.DataFrame(self._normalize_data(self.data))
                 )
-
-            return PolarsTableManagerFactory.create()(
+            return _get_polars_manager_factory()(
                 pl.DataFrame(cast(Any, self.data))
             )
-
         raise ValueError("No supported table libraries found.")
 
     def get_stats(self, column: str) -> ColumnStats:
@@ -451,10 +452,6 @@ class DefaultTableManager(TableManager[JsonTableData]):
         # If it is a dict of lists (column major),
         # convert to list of dicts (row major)
         if isinstance(data, dict) and _is_column_oriented(data):
-            # reshape column major
-            #   { "col1": [1, 2, 3], "col2": [4, 5, 6], ... }
-            # into row major
-            #   [ {"col1": 1, "col2": 4}, {"col1": 2, "col2": 5 }, ...]
             column_values = data.values()
             column_names = list(data.keys())
             return [
@@ -483,9 +480,6 @@ class DefaultTableManager(TableManager[JsonTableData]):
                     "data must be a sequence of JSON-serializable types, or a "
                     "sequence of dicts."
                 )
-
-            # we're going to assume that data has the right shape, after
-            # having checked just the first entry
             casted = cast(list[Union[str, int, float, bool, MIME, None]], data)
             return [{"value": datum} for datum in casted]
         # Sequence of dicts
@@ -496,3 +490,46 @@ def _is_column_oriented(data: JsonTableData) -> bool:
     return isinstance(data, dict) and all(
         isinstance(value, (list, tuple)) for value in data.values()
     )
+
+
+# Faster repeated calls by memoizing has() results and factories
+def _fast_is_pandas_available():
+    # Memoize result using function attribute
+    if not hasattr(_fast_is_pandas_available, "_result"):
+        _fast_is_pandas_available._result = DependencyManager.pandas.has()
+    return _fast_is_pandas_available._result
+
+
+def _fast_is_polars_available():
+    if not hasattr(_fast_is_polars_available, "_result"):
+        _fast_is_polars_available._result = DependencyManager.polars.has()
+    return _fast_is_polars_available._result
+
+
+def _get_pandas_manager_factory():
+    if not hasattr(_get_pandas_manager_factory, "_cls"):
+        _get_pandas_manager_factory._cls = PandasTableManagerFactory.create()
+    return _get_pandas_manager_factory._cls
+
+
+def _get_polars_manager_factory():
+    if not hasattr(_get_polars_manager_factory, "_cls"):
+        _get_polars_manager_factory._cls = PolarsTableManagerFactory.create()
+    return _get_polars_manager_factory._cls
+
+
+# Use imports only if needed for performance
+def _get_pandas_module():
+    if not hasattr(_get_pandas_module, "_mod"):
+        import pandas as pd
+
+        _get_pandas_module._mod = pd
+    return _get_pandas_module._mod
+
+
+def _get_polars_module():
+    if not hasattr(_get_polars_module, "_mod"):
+        import polars as pl
+
+        _get_polars_module._mod = pl
+    return _get_polars_module._mod
