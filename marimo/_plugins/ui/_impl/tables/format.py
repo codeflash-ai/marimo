@@ -14,48 +14,49 @@ FormatMapping = dict[str, Union[str, Callable[..., JSONType]]]
 def format_value(
     col: str, value: JSONType, format_mapping: FormatMapping
 ) -> JSONType:
-    if format_mapping is None:
-        return value
-
-    if col not in format_mapping:
+    # Fast path: None mapping or column not present
+    if not format_mapping or col not in format_mapping:
         return value
 
     formatter = format_mapping[col]
 
-    # If the value is None, we don't want to format it
-    # with strings for formatting, but we do want to
-    # format it with callables.
+    # If the value is None and formatter is a string, don't format
     if value is None and isinstance(formatter, str):
         return value
 
+    # Rewrite flow to avoid double-checks and costly try/except
     try:
         if isinstance(formatter, str):
-            # Handle numeric formatting specially to preserve signs and separators
-            if isinstance(value, (int, float)):
-                # Keep integers as integers for 'd' format specifier
-                if isinstance(value, int) and "d" in formatter:
+            # Optimize lookup for numeric formatting
+            if isinstance(value, int):
+                if "d" in formatter:
                     return formatter.format(value)
-                # Convert to float for float formatting
-                return formatter.format(float(value))
+                else:
+                    return formatter.format(float(value))
+            if isinstance(value, float):
+                return formatter.format(value)
+            # Avoid formatting None, already checked above
             return formatter.format(value)
-        if callable(formatter):
+        elif callable(formatter):
             return formatter(value)
     except Exception as e:
+        # Only log warning if an actual error occurs, do not pre-check
         LOGGER.warning(
             f"Error formatting for value {value} in column {col}: {str(e)}"
         )
         return value
 
+    # Fallback if formatter is neither string nor callable
     return value
 
 
 def format_row(
     row: dict[str, JSONType], format_mapping: FormatMapping
 ) -> dict[str, JSONType]:
-    # Return None if the format mapping is None
-    if format_mapping is None:
+    # Return input row if there is no format mapping
+    if not format_mapping:
         return row
-    # Apply formatting to each value in a row dictionary
+    # Use dictionary comprehension for fast row formatting
     return {
         col: format_value(col, value, format_mapping)
         for col, value in row.items()
