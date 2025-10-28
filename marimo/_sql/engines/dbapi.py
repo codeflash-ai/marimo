@@ -135,25 +135,25 @@ class DBAPIEngine(QueryEngine[DBAPIConnection]):
         """
         try:
             # Required methods
-            has_execute = callable(getattr(obj, "execute", None))
-            # has_executemany = callable(getattr(obj, "executemany", None))
+            execute = getattr(obj, "execute", None)
+            if not callable(execute):
+                return False
 
             # At least one fetch method
-            fetch_methods = ("fetchone", "fetchmany", "fetchall")
-            has_fetch = any(
-                callable(getattr(obj, m, None)) for m in fetch_methods
-            )
+            if not (
+                callable(getattr(obj, "fetchone", None))
+                or callable(getattr(obj, "fetchmany", None))
+                or callable(getattr(obj, "fetchall", None))
+            ):
+                return False
 
             # Required attributes (description may be None after DML, but must exist)
-            has_description_attr = hasattr(obj, "description")
-            has_rowcount = hasattr(obj, "rowcount")
+            if not hasattr(obj, "description"):
+                return False
+            if not hasattr(obj, "rowcount"):
+                return False
 
-            return (
-                has_execute
-                and has_fetch
-                and has_description_attr
-                and has_rowcount
-            )
+            return True
         except Exception:
             return False
 
