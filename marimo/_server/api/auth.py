@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
+from starlette.status import HTTP_401_UNAUTHORIZED
 
 from marimo import _loggers
 
@@ -103,7 +104,7 @@ def _parse_basic_auth_header(
 
 def raise_basic_auth_error() -> HTTPException:
     return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
+        status_code=HTTP_401_UNAUTHORIZED,
         detail="Authorization header required",
         headers={"WWW-Authenticate": "Basic"},
     )
