@@ -517,53 +517,53 @@ def _apply_column_edit_column_oriented(
     """Apply a column edit to column-oriented data."""
     column_order = list(data.keys())
     new_column_name = edit.get("newName")
-
     column_idx = edit["columnIdx"]
     edit_type = edit["type"]
 
-    _validate_column_edit(edit, len(data), new_column_name)
+    _validate_column_edit(edit, len(column_order), new_column_name)
 
-    column_idx = edit["columnIdx"]
-    edit_type = edit["type"]
-
+    # === insert case
     if edit_type == "insert":
         assert new_column_name is not None
-
-        data_length = len(data[column_order[0]]) if column_order else 0
-
+        # Use next(iter(...)) instead of column_order[0] for less copying, fallback for []
+        data_length = len(data[next(iter(data))]) if column_order else 0
         if column_idx == len(column_order):
             # Add new column at the end
             data[new_column_name] = [None] * data_length
         else:
             # Insert new column at specific index
-            column_data = data.copy()
+            column_data = data.copy()  # dictionary copy is needed
             data.clear()
-            for idx, key in enumerate(column_order):
-                if idx == column_idx:
-                    data[new_column_name] = [None] * data_length
+            # Precompute insertion positions for contiguous rebuild
+            # Use slicing for keys (reduces overhead of for/enumerate/if)
+            # Insert up to index
+            for key in column_order[:column_idx]:
+                data[key] = column_data[key]
+            # Insert new column
+            data[new_column_name] = [None] * data_length
+            # Insert rest
+            for key in column_order[column_idx:]:
                 data[key] = column_data[key]
         return
 
-    # Find column by index
-    column_id = None
-    for idx, key in enumerate(column_order):
-        if idx == column_idx:
-            column_id = key
-            break
-
-    if column_id is None:
+    # Find column by index directly (no need for loop)
+    try:
+        column_id = column_order[column_idx]
+    except IndexError:
         raise ValueError(f"Column index {column_idx} not found")
 
+    # === rename
     if edit_type == "rename":
         assert new_column_name is not None
-
         column_data = data.copy()
         data.clear()
+        # Simply rebuild dict in-order, replace renamed key
         for key in column_order:
             if key == column_id:
                 data[new_column_name] = column_data[key]
             else:
                 data[key] = column_data[key]
+    # === remove
     elif edit_type == "remove":
         del data[column_id]
 
