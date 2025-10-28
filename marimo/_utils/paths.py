@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from importlib.resources import files as importlib_files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,13 +11,11 @@ if TYPE_CHECKING:
 
 
 def import_files(filename: str) -> Traversable:
-    from importlib.resources import files as importlib_files
-
     return importlib_files(filename)
 
 
 def marimo_package_path() -> Path:
-    return Path(str(import_files("marimo")))
+    return Path(import_files("marimo"))
 
 
 def pretty_path(filename: str) -> str:
