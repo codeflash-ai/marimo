@@ -274,11 +274,12 @@ def _apply_edits_column_oriented(
     schema: Optional[nw.Schema] = None,
 ) -> ColumnOrientedData:
     for edit in edits["edits"]:
-        if is_positional_edit(edit):
-            _apply_positional_edit_column_oriented(data, edit, schema)
-        elif is_row_edit(edit):
-            _apply_row_edit_column_oriented(data, edit)
-        elif is_column_edit(edit):
+        if "rowIdx" in edit:
+            if "columnId" in edit and "value" in edit:
+                _apply_positional_edit_column_oriented(data, edit, schema)
+            elif "type" in edit:
+                _apply_row_edit_column_oriented(data, edit)
+        elif "columnIdx" in edit and "type" in edit:
             _apply_column_edit_column_oriented(data, edit)
 
     return data
@@ -441,13 +442,15 @@ def _apply_positional_edit_column_oriented(
 ) -> None:
     """Apply a positional edit to column-oriented data."""
     column = data[edit["columnId"]]
-    if edit["rowIdx"] >= len(column):
+    rowIdx = edit["rowIdx"]
+    col_len = len(column)
+    if rowIdx >= col_len:
         # Extend the column with None values up to the new row index
-        column.extend([None] * (edit["rowIdx"] - len(column) + 1))
+        column.extend([None] * (rowIdx - col_len + 1))
     dtype = schema.get(edit["columnId"]) if schema else None
-    column[edit["rowIdx"]] = _convert_value(
-        edit["value"], column[0] if column else None, dtype
-    )
+    # Avoid repeated conditional lookup
+    orig_val = column[0] if column else None
+    column[rowIdx] = _convert_value(edit["value"], orig_val, dtype)
 
 
 def _apply_positional_edit_row_oriented(
@@ -474,10 +477,13 @@ def _apply_row_edit_column_oriented(
     """Apply a row edit to column-oriented data."""
     if edit["type"] == "remove":
         rowIdx = edit["rowIdx"]
-        for column in data.values():
-            if not _is_valid_index(rowIdx, len(column)):
-                continue
-            del column[rowIdx]
+        columns = list(data.values())
+        col_count = len(columns)
+        # Instead of for...in...values() use reversed order and pop for last index for micro-speedup if desired,
+        # but for behaviors preservation keep del at index with basic loop.
+        for column in columns:
+            if _is_valid_index(rowIdx, len(column)):
+                del column[rowIdx]
 
 
 def _apply_row_edit_row_oriented(
