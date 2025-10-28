@@ -524,7 +524,7 @@ class Session:
             self.message_distributor = QueueDistributor[KernelMessage](queue=q)
 
         self.message_distributor.add_consumer(
-            lambda msg: self.session_view.add_raw_operation(msg)
+            self.session_view.add_raw_operation
         )
         self.connect_consumer(session_consumer, main=True)
         self.message_distributor.start()
