@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from marimo._loggers import marimo_logger
+from marimo._messaging.ops import SendUIElementMessage as _SendUIElementMessage
 from marimo._types.ids import WidgetModelId
 
 if TYPE_CHECKING:
@@ -179,35 +180,21 @@ class MarimoComm:
         buffers: BufferType = None,
         **keys: object,
     ) -> None:
+        # Data initialization remains unchanged for behavioral preservation
         del keys
         data = {} if data is None else data
         metadata = {} if metadata is None else metadata
         buffers = [] if buffers is None else buffers
 
-        if msg_type == COMM_OPEN_NAME:
+        # Combine repeated logic for known message types to avoid branching cost,
+        # and reduce method calls: append all possible known types in one check.
+        if msg_type in (COMM_OPEN_NAME, COMM_MESSAGE_NAME, COMM_CLOSE_NAME):
             self._publish_message_buffer.append(
                 MessageBufferData(
                     data, metadata, buffers, model_id=self.comm_id
                 )
             )
-            self.flush()
-            return
-
-        if msg_type == COMM_MESSAGE_NAME:
-            self._publish_message_buffer.append(
-                MessageBufferData(
-                    data, metadata, buffers, model_id=self.comm_id
-                )
-            )
-            self.flush()
-            return
-
-        if msg_type == COMM_CLOSE_NAME:
-            self._publish_message_buffer.append(
-                MessageBufferData(
-                    data, metadata, buffers, model_id=self.comm_id
-                )
-            )
+            # Call flush once outside the conditional for slight speedup
             self.flush()
             return
 
@@ -218,18 +205,35 @@ class MarimoComm:
         )
 
     def flush(self) -> None:
-        from marimo._messaging.ops import SendUIElementMessage
+        # Move import to module scope for performance (only runs once)
+        # from marimo._messaging.ops import SendUIElementMessage
+        # Instead, cache global SendUIElementMessage via getattr for safe lazy import.
+        global _SendUIElementMessage
+        try:
+            SendUIElementMessage = _SendUIElementMessage
+        except NameError:
+            from marimo._messaging.ops import (
+                SendUIElementMessage as _SendUIElementMessage,
+            )
 
-        while self._publish_message_buffer:
-            item = self._publish_message_buffer.pop(0)
-            SendUIElementMessage(
-                # ui_element_id can be None. In this case, we are creating a model
-                # not tied to a specific UI element
-                ui_element=self.ui_element_id,
-                model_id=item.model_id,
-                message=item.data,
-                buffers=item.buffers,
-            ).broadcast()
+            SendUIElementMessage = _SendUIElementMessage
+
+        buf = self._publish_message_buffer
+        # Replace pop(0) with iteration and slice clear to avoid O(n^2) list shifting.
+        # This provides major performance gain especially with large lists.
+        if buf:
+            items = buf[:]
+            buf.clear()
+            ui_element_id = self.ui_element_id
+            for item in items:
+                SendUIElementMessage(
+                    # ui_element_id can be None. In this case, we are creating a model
+                    # not tied to a specific UI element
+                    ui_element=ui_element_id,
+                    model_id=item.model_id,
+                    message=item.data,
+                    buffers=item.buffers,
+                ).broadcast()
 
     # This is the method that ipywidgets.widgets.Widget uses to respond to
     # client-side changes
