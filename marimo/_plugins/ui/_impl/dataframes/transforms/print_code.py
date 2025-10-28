@@ -503,4 +503,4 @@ def _list_of_strings(value: Union[list[Any], Any]) -> str:
 
 
 def _args_list(*args: str) -> str:
-    return ", ".join(arg for arg in args if arg)
+    return ", ".join(filter(None, args))
