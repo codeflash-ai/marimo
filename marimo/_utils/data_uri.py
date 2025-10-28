@@ -15,7 +15,19 @@ def build_data_url(mimetype: str, data: bytes) -> str:
 def from_data_uri(data: str) -> tuple[str, bytes]:
     assert isinstance(data, str)
     assert data.startswith("data:")
-    mime_type, data = data.split(",", 1)
-    # strip data: and ;base64
-    mime_type = mime_type.split(";")[0][5:]
-    return mime_type, base64.b64decode(data)
+
+    # Split on the first comma only to separate metadata from payload
+    comma_idx = data.find(",")
+    if comma_idx == -1:
+        raise ValueError("Invalid data URI format: missing comma separator")
+    meta, payload = data[:comma_idx], data[comma_idx + 1 :]
+
+    # Efficient extraction of mime_type without additional intermediate objects
+    semi_idx = meta.find(";")
+    if semi_idx == -1:
+        # No ";base64" - mime type extends to end
+        mime_type = meta[5:]
+    else:
+        mime_type = meta[5:semi_idx]
+
+    return mime_type, base64.b64decode(payload)
