@@ -25,15 +25,24 @@ def pretty_path(filename: str) -> str:
     we don't go outside the current directory.
     Otherwise, return the filename as is.
     """
-    if os.path.isabs(filename):
-        try:
-            relpath = os.path.relpath(filename)
-        except ValueError:
-            # Windows: relpath doesn't work if filename is on a different drive
-            # than current drive
-            return filename
-        if not relpath.startswith(".."):
-            return relpath
+    # Fast-path for relative paths
+    if not os.path.isabs(filename):
+        return filename
+
+    try:
+        # Avoid extra call to os.path.relpath if already in cwd
+        cwd = os.getcwd()
+        # If filename is exactly cwd, relpath dirname would be '.'
+        if filename == cwd:
+            return "."
+
+        relpath = os.path.relpath(filename, cwd)
+    except ValueError:
+        # Windows: relpath doesn't work if filename is on a different drive
+        # than current drive
+        return filename
+    if not relpath.startswith(".."):
+        return relpath
     return filename
 
 
