@@ -57,10 +57,9 @@ OldObjectsMapping = dict[
 
 # Compat with cmodules in Python < 3.10
 def safe_getattr(obj: M, attr: str, default: T | None = None) -> T | None:
-    try:
-        return getattr(obj, attr, default)
-    except ModuleNotFoundError:
-        return default
+    if hasattr(obj, attr):
+        return getattr(obj, attr)
+    return default
 
 
 def safe_hasattr(obj: M, attr: str) -> bool:
