@@ -586,10 +586,11 @@ class MCPClient:
 
     def get_tools_by_server(self, server_name: str) -> list[Tool]:
         """Get tools from a specific server."""
+        tool_registry_values = self.tool_registry.values()
         return [
             tool
-            for tool in self.tool_registry.values()
-            if tool.meta and tool.meta.get("server_name") == server_name
+            for tool in tool_registry_values
+            if (meta := tool.meta) and meta.get("server_name") == server_name
         ]
 
     def get_server_status(self, server_name: str) -> Optional[MCPServerStatus]:
