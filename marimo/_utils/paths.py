@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,7 @@ def marimo_package_path() -> Path:
     return Path(str(import_files("marimo")))
 
 
+@lru_cache(maxsize=1024)
 def pretty_path(filename: str) -> str:
     """
     If it's an absolute path, shorten to relative path if

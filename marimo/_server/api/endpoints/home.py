@@ -94,22 +94,32 @@ async def workspace_files(
 
 
 def _get_active_sessions(app_state: AppState) -> list[MarimoFile]:
+    sessions = app_state.session_manager.sessions
+    open_state = ConnectionState.OPEN
+    orphaned_state = ConnectionState.ORPHANED
     files: list[MarimoFile] = []
-    for session_id, session in app_state.session_manager.sessions.items():
+    append_file = files.append  # Localize method for small speedup
+
+    for session_id, session in sessions.items():
         state = session.connection_state()
-        if state == ConnectionState.OPEN or state == ConnectionState.ORPHANED:
+        if state in (open_state, orphaned_state):
             filename = session.app_file_manager.filename
-            basename = os.path.basename(filename) if filename else None
-            files.append(
+            if filename:
+                basename = os.path.basename(filename)
+                path = pretty_path(filename)
+            else:
+                basename = None
+                path = session_id
+
+            append_file(
                 MarimoFile(
                     name=(basename or "new notebook"),
-                    path=(pretty_path(filename) if filename else session_id),
+                    path=path,
                     last_modified=0,
                     session_id=session_id,
                     initialization_id=session.initialization_id,
                 )
             )
-    # These are better in reverse
     return files[::-1]
 
 
