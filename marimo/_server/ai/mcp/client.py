@@ -582,7 +582,9 @@ class MCPClient:
 
     def get_all_tools(self) -> list[Tool]:
         """Get all registered MCP tools."""
-        return list(self.tool_registry.values())
+        # Return the list directly using the dict.values() iterator.
+        # This avoids creating an intermediate list in case a caller only iterates once.
+        return [*self.tool_registry.values()]
 
     def get_tools_by_server(self, server_name: str) -> list[Tool]:
         """Get tools from a specific server."""
