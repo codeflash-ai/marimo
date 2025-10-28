@@ -314,9 +314,17 @@ def _drain_queue(
 ) -> CodeCompletionRequest:
     """Drain the queue of completion requests, returning the most recent one"""
 
+    # Get the first item (blocking)
     request = completion_queue.get()
-    while not completion_queue.empty():
-        request = completion_queue.get()
+    # Try to get subsequent items in a tight loop (non-blocking)
+    get_method = completion_queue.get  # localize for better loop performance
+    while True:
+        try:
+            request = get_method(False)
+        except Exception:
+            # According to Python queue.Queue and multiprocessing.Queue,
+            # 'get(block=False)' raises 'queue.Empty' or similar when empty.
+            break
     return request
 
 
