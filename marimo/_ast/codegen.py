@@ -67,7 +67,12 @@ def pop_setup_cell(
 
 
 def indent_text(text: str) -> str:
-    return textwrap.indent(text, INDENT)
+    if not text:
+        return ""
+    lines = text.splitlines(keepends=True)
+    return "".join(
+        (INDENT + line if line.strip() != "" else line) for line in lines
+    )
 
 
 def _format_arg(arg: Any) -> str:
