@@ -247,7 +247,9 @@ class Runner:
 
     def pending(self) -> bool:
         """Whether there are more cells to run."""
-        return not self.interrupted and len(self.cells_to_run) > 0
+        # Fast path: interrupted check and non-empty list check combined with
+        # direct boolean conversion (avoid len())
+        return not self.interrupted and bool(self.cells_to_run)
 
     def _get_run_position(self, cell_id: CellId_t) -> Optional[int]:
         """Position in the original run queue"""
