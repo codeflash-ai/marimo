@@ -61,7 +61,13 @@ def module_exists_in_site_packages(module_name: str) -> bool:
         if hasattr(site, "getusersitepackages"):
             site_packages_dirs.append(site.getusersitepackages())
 
+        # Deduplicate directories
+        seen_dirs = set()
         for site_dir in site_packages_dirs:
+            if not site_dir or site_dir in seen_dirs:
+                continue
+            seen_dirs.add(site_dir)
+
             if not os.path.exists(site_dir):
                 continue
 
@@ -76,14 +82,20 @@ def module_exists_in_site_packages(module_name: str) -> bool:
                 return True
 
             # Check for .pth files or other package indicators
-            for entry in os.listdir(site_dir):
-                module = entry.split("-", 1)[0]
-                if module == module_name and (
-                    entry.endswith(".egg-info")
-                    or entry.endswith(".dist-info")
-                    or entry.endswith(".egg")
-                ):
-                    return True
+            try:
+                entries = os.listdir(site_dir)
+            except OSError:
+                continue
+
+            for entry in entries:
+                if entry.startswith(module_name):
+                    module = entry.split("-", 1)[0]
+                    if module == module_name and (
+                        entry.endswith(".egg-info")
+                        or entry.endswith(".dist-info")
+                        or entry.endswith(".egg")
+                    ):
+                        return True
 
     except Exception:
         # If we can't check site-packages, assume it might exist
