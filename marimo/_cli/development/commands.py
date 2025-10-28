@@ -353,23 +353,30 @@ def get_marimo_processes() -> list[psutil.Process]:
     import psutil
 
     def is_marimo_process(proc: psutil.Process) -> bool:
-        if proc.name() == "marimo":
+        name = proc.name()
+        if name == "marimo":
             return True
 
-        if proc.name().lower() == "python":
+        if name.lower() == "python":
             try:
                 cmds = proc.cmdline()
-            except psutil.AccessDenied:
+            except (psutil.AccessDenied, psutil.ZombieProcess):
                 return False
-            except psutil.ZombieProcess:
-                return False
-            # any endswith marimo
-            has_marimo = any(x.endswith("marimo") for x in cmds)
-            # any command equals "tutorial", "edit", or "run"
-            has_running_command = any(
-                x in {"run", "tutorial", "edit"} for x in cmds
-            )
-            return has_marimo and has_running_command
+            # Single pass through commands for efficiency
+            has_marimo = False
+            has_running_command = False
+            for x in cmds:
+                if not has_marimo and x.endswith("marimo"):
+                    has_marimo = True
+                if not has_running_command and x in {
+                    "run",
+                    "tutorial",
+                    "edit",
+                }:
+                    has_running_command = True
+                if has_marimo and has_running_command:
+                    return True
+            return False
 
         return False
 
