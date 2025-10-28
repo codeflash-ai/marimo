@@ -14,12 +14,14 @@ def maybe_wrap_in_iframe(html_content: str) -> str:
 
 def _has_script_tag_without_src(html_content: str) -> bool:
     # Cheap check
-    if "<script" not in html_content:
+    idx = html_content.find("<script")
+    if idx == -1:
         return False
 
+    # Fast path: scan only relevant substring from first <script
     parser = ScriptTagParser()
     try:
-        parser.feed(html_content)  # type: ignore
+        parser.feed(html_content[idx:])  # type: ignore
         return parser.has_script_without_src
     except StopIteration:
         return parser.has_script_without_src
