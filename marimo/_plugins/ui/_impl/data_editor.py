@@ -486,7 +486,7 @@ def _apply_row_edit_row_oriented(
 ) -> None:
     """Apply a row edit to row-oriented data."""
     rowIdx = edit["rowIdx"]
-    if not _is_valid_index(rowIdx, len(data)):
+    if rowIdx < 0 or rowIdx >= len(data):
         return
     if edit["type"] == "remove":
         data.pop(rowIdx)
