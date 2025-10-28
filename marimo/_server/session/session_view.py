@@ -401,9 +401,18 @@ def merge_cell_operation(
     if next_.status == "running" and previous.status == "queued":
         next_.console = []
     else:
-        combined_console: list[CellOutput] = as_list(previous.console)
-        combined_console.extend(as_list(next_.console))
-        next_.console = combined_console
+        prev_console = previous.console
+        next_console = next_.console
+        # Avoid unnecessary copying if both are lists and next_console is not None
+        if isinstance(prev_console, list) and isinstance(next_console, list):
+            # Mutate in place for efficiency
+            prev_len = len(prev_console)
+            prev_console.extend(next_console)
+            next_.console = prev_console
+        else:
+            combined_console: list[CellOutput] = as_list(prev_console)
+            combined_console.extend(as_list(next_console))
+            next_.console = combined_console
 
     # If we went from running to running, use the previous timestamp.
     if next_.status == "running" and previous.status == "running":
