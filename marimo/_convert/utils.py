@@ -17,11 +17,12 @@ def markdown_to_marimo(source: str) -> str:
     if "\n" not in source:
         return f'mo.md(r"""{source}""")'
 
+    # Precompute the indented triple-quote for efficiency
+    indented_r_triple_quote = codegen.indent_text('r"""')
     return "\n".join(
         [
             "mo.md(",
-            # r-string: a backslash is just a backslash!
-            codegen.indent_text('r"""'),
+            indented_r_triple_quote,
             source,
             '"""',
             ")",

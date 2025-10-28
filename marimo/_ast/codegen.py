@@ -67,7 +67,9 @@ def pop_setup_cell(
 
 
 def indent_text(text: str) -> str:
-    return textwrap.indent(text, INDENT)
+    # More efficient single-line indentation than textwrap.indent
+    # (textwrap.indent is overkill for constant single-line usage)
+    return f"{INDENT}{text}"
 
 
 def _format_arg(arg: Any) -> str:
