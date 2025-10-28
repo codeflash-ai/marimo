@@ -497,9 +497,12 @@ def _as_literal(value: Any) -> str:
 
 
 def _list_of_strings(value: Union[list[Any], Any]) -> str:
+    # Minor optimization: store _as_literal to local for inner loop
+    as_literal = _as_literal
     if isinstance(value, list):
-        return f"[{', '.join(_as_literal(v) for v in value)}]"
-    return _as_literal(value)
+        # Optimize join: use list comprehension
+        return f"[{', '.join([as_literal(v) for v in value])}]"
+    return as_literal(value)
 
 
 def _args_list(*args: str) -> str:
