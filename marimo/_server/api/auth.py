@@ -40,26 +40,21 @@ def validate_auth(
     # Check for session cookie
     cookie_session = CookieSession(conn.session)
 
-    # Validate the cookie
     if cookie_session.get_access_token() == auth_token:
         return True  # Success
 
     # Check for access_token
-    if TOKEN_QUERY_PARAM in conn.query_params:
-        # Validate the access_token
-        if conn.query_params[TOKEN_QUERY_PARAM] == auth_token:
-            LOGGER.debug("Validated access_token from query param")
-            # Set the cookie
-            cookie_session.set_access_token(auth_token)
-            return True  # Success
+    access_token = conn.query_params.get(TOKEN_QUERY_PARAM)
+    if access_token == auth_token:
+        LOGGER.debug("Validated access_token from query param")
+        cookie_session.set_access_token(auth_token)
+        return True  # Success
 
     # Check for form data
     if form_dict is not None:
-        # Validate the access_token
         password = form_dict.get("password")
         if password == auth_token:
             LOGGER.debug("Validated access_token from form data")
-            # Set the cookie
             cookie_session.set_access_token(auth_token)
             return True
         else:
@@ -72,7 +67,6 @@ def validate_auth(
         username, password = _parse_basic_auth_header(auth)
         if username and password == auth_token:
             LOGGER.debug("Validated basic auth from header")
-            # Set the cookie
             cookie_session.set_access_token(auth_token)
             cookie_session.set_username(username)
             return True  # Success
