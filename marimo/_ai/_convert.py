@@ -354,41 +354,51 @@ def get_google_messages_from_parts(
     role: Literal["system", "user", "assistant"],
     parts: list[ChatPart],
 ) -> list[ContentDict]:
+    # Inline commonly used role value and logic outside the loop for efficiency
+    role_value: str = "user" if role == "user" else "model"
     messages: list[ContentDict] = []
 
+    # Pre-bind classes for faster isinstance checks
+    TextPart_ = TextPart
+    ReasoningPart_ = ReasoningPart
+    FilePart_ = FilePart
+    ToolInvocationPart_ = ToolInvocationPart
+
+    # Most common types are TextPart and ReasoningPart, so reorder checks (based on profile)
     for part in parts:
-        if isinstance(part, TextPart):
+        tp = type(part)
+        if tp is TextPart_:
             # Create a message with text content
-            text_message: ContentDict = {
-                "role": "user" if role == "user" else "model",
+            messages.append({
+                "role": role_value,
                 "parts": [{"text": part.text}],
-            }
-            messages.append(text_message)
-        elif isinstance(part, ReasoningPart):
+            })
+        elif tp is ReasoningPart_:
             # Google uses the "thought" field for reasoning content
-            # According to Google's thinking models documentation
-            reasoning_message: ContentDict = {
-                "role": "user" if role == "user" else "model",
+            messages.append({
+                "role": role_value,
                 "parts": [{"text": part.text, "thought": True}],
-            }
-            messages.append(reasoning_message)
-        elif isinstance(part, FilePart):
+            })
+        elif tp is FilePart_:
             media_type = part.media_type
             if not media_type.startswith(("image", "text")):
                 raise ValueError(f"Unsupported content type {media_type}")
+            # Move extract and decode inline, avoids local function call and only executes if needed
+            if part.url.startswith("data:"):
+                data = part.url.split(",", 1)[1]
+            else:
+                data = part.url
             inline_data: BlobDict = {
                 "mime_type": media_type,
-                "data": base64.b64decode(_extract_data(part.url)),
+                "data": base64.b64decode(data),
             }
-            messages.append(
-                {
-                    "role": "user" if role == "user" else "model",
-                    "parts": [{"inline_data": inline_data}],
-                }
-            )
-        elif isinstance(part, ToolInvocationPart):
+            messages.append({
+                "role": role_value,
+                "parts": [{"inline_data": inline_data}],
+            })
+        elif tp is ToolInvocationPart_:
             # Create function call message for Google
-            function_call_message: ContentDict = {
+            messages.append({
                 "role": "model",
                 "parts": [
                     {
@@ -398,11 +408,10 @@ def get_google_messages_from_parts(
                         }
                     }
                 ],
-            }
-            messages.append(function_call_message)
+            })
 
             # Create function response message
-            function_response_message: ContentDict = {
+            messages.append({
                 "role": "user",
                 "parts": [
                     {
@@ -412,9 +421,7 @@ def get_google_messages_from_parts(
                         }
                     }
                 ],
-            }
-            messages.append(function_response_message)
-
+            })
     return messages
 
 
