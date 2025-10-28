@@ -1,13 +1,6 @@
 import marimo
 
-__generated_with = "0.15.5"
-app = marimo.App(width="medium")
-
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_task_list_md = """
         ## Task List
 
         - item
@@ -23,39 +16,21 @@ def _(mo):
         -   [ ] item 2
         -   [ ] item 3
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_base64_md = """
         ## Base 64
 
         ![picture](../../docs/_static/docs-settings.png)
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_admonitions_md = """
         ## Admonitions
 
         !!! important ""
             This is an admonition box without a title.
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_caption_md = """
         ## Caption
 
         Fruit      | Amount
@@ -69,14 +44,8 @@ def _(mo):
         Fruit Count
         ///
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_tabs_md = """
         ## Tabs
 
         /// tab | Tab 1 title
@@ -87,14 +56,8 @@ def _(mo):
         Tab 2 content
         ///
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        """
+_details_md = """
         ## Details
 
         /// details | Basic details
@@ -125,14 +88,8 @@ def _(mo):
         This indicates a successful outcome or positive note
         ///
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_nested_em_md = r"""
         ## Nested em
 
         This * won't emphasize *
@@ -143,14 +100,8 @@ def _(mo):
 
         ***I'm bold and italic!** I am just italic.*
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_critic_md = r"""
         ## Critic
 
         Here is some {--*incorrect*--} Markdown.  I am adding this{++ here++}.  Here is some more {--text
@@ -186,51 +137,27 @@ def _(mo):
 
         ++}
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_emoji_md = """
         ## Emoji
 
         :smile: :heart: :thumbsup:
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_keys_md = """
         ## Keys
 
         ++ctrl+alt+delete++
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_magic_link_md = """
         ## Magic link
 
         - Just paste links directly in the document like this: https://google.com.
         - Or even an email address: fake.email@email.com.
         """
-    )
-    return
 
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
+_subscripts_md = r"""
         ## Subscripts and strikethrough
 
         ~~Delete me~~
@@ -239,8 +166,81 @@ def _(mo):
 
         text~a\ subscript~
         """
-    )
-    return
+
+__generated_with = "0.15.5"
+app = marimo.App(width="medium")
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _(mo):
+    import marimo as mo
+    return (mo,)
 
 
 @app.cell
