@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from functools import cache
+from functools import cache, lru_cache
 from importlib.util import find_spec
 from inspect import cleandoc
 from pathlib import Path
@@ -277,7 +277,7 @@ class _md(Html):
 
 @mddoc
 def md(text: str) -> Html:
-    r"""Write markdown
+    """Write markdown
 
     This function takes a string of markdown as input and returns an Html
     object. Output the object as the last expression of a cell to render
@@ -307,7 +307,7 @@ def md(text: str) -> Html:
 
     **LaTeX.**
 
-    Enclose LaTeX in single '\$' signs for inline math, and double '\$\$' for
+    Enclose LaTeX in single '\\$' signs for inline math, and double '\\$\\$' for
     display math or square brackets for display math. (Use raw strings,
     prefixed with an "r", to use single backslashes.) For example:
 
@@ -316,9 +316,9 @@ def md(text: str) -> Html:
         r'''
         The exponential function $f(x) = e^x$ can be represented as
 
-        \[
-            f(x) = 1 + x + \frac{x^2}{2!} + \frac{x^3}{3!} + \ldots.
-        \]
+        \\[
+            f(x) = 1 + x + \frac{x^2}{2!} + \frac{x^3}{3!} + \\ldots.
+        \\]
         '''
     )
     ```
@@ -327,7 +327,7 @@ def md(text: str) -> Html:
     The exponential function $f(x) = e^x$ can be represented as
 
     $$
-    f(x) = 1 + x + \frac{x^2}{2!} + \frac{x^3}{3!} + \ldots.
+    f(x) = 1 + x + \frac{x^2}{2!} + \frac{x^3}{3!} + \\ldots.
     $$
 
 
@@ -337,7 +337,7 @@ def md(text: str) -> Html:
     Returns:
         An `Html` object.
     """
-    return _md(text)
+    return _md_cached(text)
 
 
 def latex(*, filename: Union[str, Path]) -> None:
@@ -380,3 +380,8 @@ def latex(*, filename: Union[str, Path]) -> None:
     # is not the last expression of the cell
     output.append(_md(f"$$\n{text.strip()}\n$$"))
     return
+
+
+@lru_cache(maxsize=128)
+def _md_cached(text: str) -> Html:
+    return _md(text)
