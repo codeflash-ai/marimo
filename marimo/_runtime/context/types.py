@@ -229,9 +229,10 @@ def get_context() -> RuntimeContext:
     Throws a ContextNotInitializedError if the context has not been
     created.
     """
-    if _THREAD_LOCAL_CONTEXT.runtime_context is None:
+    runtime_context = _THREAD_LOCAL_CONTEXT.runtime_context
+    if runtime_context is None:
         raise ContextNotInitializedError
-    return _THREAD_LOCAL_CONTEXT.runtime_context
+    return runtime_context
 
 
 def safe_get_context() -> Optional[RuntimeContext]:

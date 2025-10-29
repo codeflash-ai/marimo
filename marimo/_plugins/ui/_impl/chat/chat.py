@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Callable, Final, Optional, Union, cast
 
 from marimo._ai._types import (
@@ -213,11 +214,7 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
         # If the model is a callable that takes a single argument,
         # call it with just the messages.
         response: object
-        if (
-            callable(self._model)
-            and not isinstance(self._model, type)
-            and len(inspect.signature(self._model).parameters) == 1
-        ):
+        if _func_takes_single_arg(self._model):
             response = self._model(messages)  # type: ignore
         else:
             response = self._model(messages, args.config)
@@ -279,3 +276,15 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
 
         messages = value["messages"]
         return [from_chat_message_dict(msg) for msg in messages]
+
+
+@lru_cache(maxsize=128)
+def _func_takes_single_arg(func: Callable) -> bool:
+    try:
+        return (
+            callable(func)
+            and not isinstance(func, type)
+            and len(inspect.signature(func).parameters) == 1
+        )
+    except Exception:
+        return False
