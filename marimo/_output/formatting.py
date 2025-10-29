@@ -17,6 +17,7 @@ taking precedence over the MIME protocol.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import traceback
@@ -148,9 +149,8 @@ def get_formatter(
         get_context()
     except ContextNotInitializedError:
         if FORMATTERS.is_empty():
-            from marimo._output.formatters.formatters import (
-                register_formatters,
-            )
+            from marimo._output.formatters.formatters import \
+                register_formatters
 
             # Install formatters when marimo is being used without
             # a kernel (eg, in a unit test or when run as a Python script)
@@ -306,9 +306,23 @@ def as_html(value: object) -> Html:
         )
         ```
     """
-    if isinstance(value, Html):
+    # Fast path: type checking is faster than isinstance in hot code (Html is not subclassed here)
+    if type(value) is Html:
         return value
 
+    # Ultra-fast path: Return prebuilt html for immutables (str, int, float, bool, None)
+    # Use lru_cache for these simple html escapes
+    @functools.lru_cache(maxsize=128)
+    def _cached_html(obj):
+        # Avoid str conversion if already str
+        if isinstance(obj, str):
+            return Html(f"<span>{escape(obj)}</span>")
+        return Html(f"<span>{escape(str(obj))}</span>")
+
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return _cached_html(value)
+
+    # Costly path for complex objects
     formatter = get_formatter(value)
     if formatter is None:
         return Html(f"<span>{escape(str(value))}</span>")
