@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import logging
 from contextlib import contextmanager
+from functools import lru_cache
 from logging.handlers import TimedRotatingFileHandler
 from typing import TYPE_CHECKING, Optional
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import subprocess
 from abc import ABC, abstractmethod
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Optional, Union, cast
 
@@ -239,7 +240,7 @@ class PyLspServer(BaseLspServer):
     def get_command(self) -> list[str]:
         import sys
 
-        log_file = _loggers.get_log_directory() / "pylsp.log"
+        log_file = self._log_file
 
         return [
             sys.executable,
@@ -260,6 +261,10 @@ class PyLspServer(BaseLspServer):
             description="<span><a class='hyperlink' href='https://github.com/python-lsp/python-lsp-server'>Install python-lsp-server</a> for Python language support.</span>",
             variant="danger",
         )
+
+    @cached_property
+    def _log_file(self):
+        return _loggers.get_log_directory() / "pylsp.log"
 
 
 class BasedpyrightServer(BaseLspServer):
