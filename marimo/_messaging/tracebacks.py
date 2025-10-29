@@ -36,18 +36,31 @@ def _trim_traceback(traceback: str) -> str:
     Skip first DefaultExecutor.execute_cell traceback item which all traces start with.
     """
 
-    lines = traceback.split("\n")
-    if (
-        len(lines) > 2
-        and lines[0] == "Traceback (most recent call last):"
-        and '/marimo/_runtime/executor.py", line ' in lines[1]
-        and lines[1].endswith(", in execute_cell")
-    ):
-        for i in range(2, len(lines)):
-            if lines[i].startswith("  File "):
-                return "\n".join(lines[:1] + lines[i:])
+    first_line_end = traceback.find("\n")
+    if first_line_end == -1:
+        return traceback
 
-    return traceback
+    first_line = traceback[:first_line_end]
+    if first_line != "Traceback (most recent call last):":
+        return traceback
+
+    second_line_start = first_line_end + 1
+    second_line_end = traceback.find("\n", second_line_start)
+    if second_line_end == -1:
+        return traceback
+
+    second_line = traceback[second_line_start:second_line_end]
+    if (
+        '/marimo/_runtime/executor.py", line ' not in second_line
+        or not second_line.endswith(", in execute_cell")
+    ):
+        return traceback
+
+    file_line_pos = traceback.find("\n  File ", second_line_end)
+    if file_line_pos == -1:
+        return traceback
+
+    return "\n".join([first_line, traceback[file_line_pos + 1 :]])
 
 
 def is_code_highlighting(value: str) -> bool:
