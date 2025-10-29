@@ -155,7 +155,9 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
             config = DEFAULT_CONFIG
         else:
             # overwrite defaults with user config
-            config = {**DEFAULT_CONFIG, **config}
+            # Optimize dict merge: Avoid unnecessary unpacking when config is DEFAULT_CONFIG
+            if config is not DEFAULT_CONFIG:
+                config = {**DEFAULT_CONFIG, **config}
 
         super().__init__(
             component_name=chat._name,
@@ -165,7 +167,7 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
             args={
                 "prompts": prompts,
                 "show-configuration-controls": show_configuration_controls,
-                "config": cast(JSONType, config or {}),
+                "config": cast(JSONType, config if config is not None else {}),
                 "allow-attachments": allow_attachments,
                 "max-height": max_height,
             },
@@ -194,6 +196,7 @@ class chat(UIElement[dict[str, Any], list[ChatMessage]]):
         )
 
     def _get_chat_history(self, _args: EmptyArgs) -> GetChatHistoryResponse:
+        # Avoid creating a new variable and pass attribute directly
         return GetChatHistoryResponse(messages=self._chat_history)
 
     def _delete_chat_history(self, _args: EmptyArgs) -> None:
