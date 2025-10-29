@@ -22,10 +22,7 @@ if TYPE_CHECKING:
 
 def _hypertext_cleanup(virtual_filenames: list[str]) -> None:
     """Cleanup side-effects related to initialization of Html."""
-    from marimo._runtime.context import (
-        ContextNotInitializedError,
-        get_context,
-    )
+    from marimo._runtime.context import ContextNotInitializedError, get_context
 
     try:
         ctx = get_context()
@@ -101,29 +98,26 @@ class Html(MIME):
         # A list of the virtual file names referenced by this HTML element.
         self._virtual_filenames: list[str] = []
 
-        from marimo._runtime.context import (
-            ContextNotInitializedError,
-            get_context,
-        )
+        from marimo._runtime.context import (ContextNotInitializedError,
+                                             get_context)
 
         try:
             ctx = get_context()
         except ContextNotInitializedError:
             return
 
-        # Virtual File Refcounting
-        #
-        # HTML elements are responsible for maintaining the reference counts
-        # of virtual files: virtual files cannot be disposed while HTML
-        # elements reference them. For example, a user might cache HTML
-        # referencing a virtual file if they create it using functools.cache.
-        #
-        # flatten the text to make sure searching isn't broken by newlines
-        flat_text = flatten_string(self._text)
-        for virtual_filename in ctx.virtual_file_registry.filenames():
-            if virtual_filename in flat_text:
-                ctx.virtual_file_registry.reference(virtual_filename)
-                self._virtual_filenames.append(virtual_filename)
+        # Only flatten the text once and cache
+        if not hasattr(self, "_flat_text"):
+            self._flat_text = flatten_string(self._text)
+        flat_text = self._flat_text
+
+        # Cache filenames
+        filenames = list(ctx.virtual_file_registry.filenames())
+        self._virtual_filenames = [
+            filename for filename in filenames if filename in flat_text
+        ]
+        for filename in self._virtual_filenames:
+            ctx.virtual_file_registry.reference(filename)
 
         # Dereference virtual files on object destruction
         finalizer = weakref.finalize(
