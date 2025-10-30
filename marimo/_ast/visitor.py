@@ -126,7 +126,9 @@ class Block:
     is_comprehension: bool = False
 
     def is_defined(self, name: str) -> bool:
-        return any(name == defn for defn in self.defs)
+        # Change from slow 'any(name == defn for defn in self.defs)' to 'name in self.defs'
+        # set lookup is much faster than iterating and checking equality
+        return name in self.defs
 
 
 @dataclass
@@ -307,7 +309,12 @@ class ScopedVisitor(ast.NodeVisitor):
 
     def _is_defined(self, identifier: str) -> bool:
         """Check if `identifier` is defined in any block."""
-        return any(block.is_defined(identifier) for block in self.block_stack)
+        # Change from slow 'any(block.is_defined(identifier) for block in self.block_stack)'
+        # to a loop with early exit to avoid generator overhead for a very hot path
+        for block in self.block_stack:
+            if block.is_defined(identifier):
+                return True
+        return False
 
     def _add_ref(
         self,
