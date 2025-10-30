@@ -37,10 +37,8 @@ class GetActiveNotebooksData:
 
 def _default_active_notebooks_data() -> GetActiveNotebooksData:
     return GetActiveNotebooksData(
-        summary=SummaryInfo(
-            total_notebooks=0, total_sessions=0, active_connections=0
-        ),
-        notebooks=[],
+        SummaryInfo(0, 0, 0),
+        [],
     )
 
 
