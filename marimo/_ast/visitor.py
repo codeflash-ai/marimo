@@ -392,7 +392,7 @@ class ScopedVisitor(ast.NodeVisitor):
         (global scope) block.
         """
         block_idx = 0 if name in self.block_stack[-1].global_names else -1
-        self._define_in_block(name, variable_data, block_idx=block_idx)
+        self._define_in_block(name, variable_data, block_idx)
         if node is not None:
             self._on_def(node, name, self.block_stack)
 
@@ -996,14 +996,19 @@ class ScopedVisitor(ast.NodeVisitor):
         return node
 
     def visit_Import(self, node: ast.Import) -> ast.Import:
+        get_alias_name = self._get_alias_name
+        _define = self._define
+        VariableData_ = VariableData  # Localize for attribute lookup speed
+        ImportData_ = ImportData
         for alias_node in node.names:
-            variable_name = self._get_alias_name(alias_node)
-            self._define(
+            variable_name = get_alias_name(alias_node)
+            # Allocate VariableData and ImportData at top-level for perf
+            _define(
                 None,
                 variable_name,
-                VariableData(
+                VariableData_(
                     kind="import",
-                    import_data=ImportData(
+                    import_data=ImportData_(
                         module=alias_node.name,
                         definition=variable_name,
                         imported_symbol=None,
