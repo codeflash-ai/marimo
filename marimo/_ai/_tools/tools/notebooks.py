@@ -1,4 +1,5 @@
 # Copyright 2025 Marimo. All rights reserved.
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -64,23 +65,25 @@ class GetActiveNotebooks(ToolBase[EmptyArgs, GetActiveNotebooksOutput]):
         session_manager = context.session_manager
         active_files = self._get_active_sessions_internal(session_manager)
 
-        # Build notebooks list
-        notebooks: list[NotebookInfo] = []
-        for file_info in active_files:
-            notebooks.append(
-                NotebookInfo(
-                    name=file_info.name,
-                    path=file_info.path,
-                    session_id=file_info.session_id,
-                    initialization_id=file_info.initialization_id,
-                )
+        # Build notebooks list using a list comprehension for efficiency
+        notebooks: list[NotebookInfo] = [
+            NotebookInfo(
+                name=file_info.name,
+                path=file_info.path,
+                session_id=file_info.session_id,
+                initialization_id=file_info.initialization_id,
             )
+            for file_info in active_files
+        ]
 
         # Build summary statistics
+        total_notebooks = len(active_files)
+        total_sessions = len(session_manager.sessions)
+        active_connections = session_manager.get_active_connection_count()
         summary: SummaryInfo = SummaryInfo(
-            total_notebooks=len(active_files),
-            total_sessions=len(session_manager.sessions),
-            active_connections=session_manager.get_active_connection_count(),
+            total_notebooks=total_notebooks,
+            total_sessions=total_sessions,
+            active_connections=active_connections,
         )
 
         # Build data object
@@ -105,23 +108,19 @@ class GetActiveNotebooks(ToolBase[EmptyArgs, GetActiveNotebooksOutput]):
 
         This replicates the logic from marimo/_server/api/endpoints/home.py
         """
-        import os
-
         files: list[MarimoFile] = []
-        for session_id, session in session_manager.sessions.items():
+        active_states = {ConnectionState.OPEN, ConnectionState.ORPHANED}
+        sessions = session_manager.sessions
+        # Iterate with pre-filter, minimizing lookups and branches
+        for session_id, session in sessions.items():
             state = session.connection_state()
-            if (
-                state == ConnectionState.OPEN
-                or state == ConnectionState.ORPHANED
-            ):
+            if state in active_states:
                 filename = session.app_file_manager.filename
                 basename = os.path.basename(filename) if filename else None
                 files.append(
                     MarimoFile(
                         name=(basename or "new notebook"),
-                        path=(
-                            pretty_path(filename) if filename else session_id
-                        ),
+                        path=pretty_path(filename) if filename else session_id,
                         session_id=session_id,
                         initialization_id=session.initialization_id,
                     )
