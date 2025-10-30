@@ -5,14 +5,13 @@ from marimo._cli.print import orange
 
 
 def highlight_toml_headers(toml_string: str) -> str:
-    lines = toml_string.splitlines()
-    highlighted_lines: list[str] = []
+    # Use generator to avoid list allocation
+    def _highlight_line(line: str) -> str:
+        # Only check header format if line is non-empty and long enough
+        if line and line[0] == "[" and line[-1] == "]":
+            return orange(line)
+        return line
 
-    for line in lines:
-        stripped_line = line.strip()
-        if stripped_line.startswith("[") and stripped_line.endswith("]"):
-            highlighted_lines.append(orange(line))
-        else:
-            highlighted_lines.append(line)
-
-    return "\n".join(highlighted_lines)
+    return "\n".join(
+        _highlight_line(line) for line in toml_string.splitlines()
+    )
