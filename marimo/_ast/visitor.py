@@ -880,26 +880,36 @@ class ScopedVisitor(ast.NodeVisitor):
         return node
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> ast.NamedExpr:
+        # OPT: cache frequently used variables for speed
         self.visit(node.value)
-        if self.block_stack[-1].is_comprehension and isinstance(
+        block_stack = self.block_stack
+        current_block = block_stack[-1]
+        if current_block.is_comprehension and isinstance(
             node.target, ast.Name
         ):
-            for block_idx, block in reversed(
-                list(enumerate(self.block_stack))
-            ):
-                # go up the block stack until we find the first
-                # non-comprehension block
+            # OPT: Don't use list(enumerate()) and reversed()
+            # Instead, avoid building an intermediate list; loop in reverse directly
+            block_stack_len = len(block_stack)
+            idx = block_stack_len - 1
+            while idx >= 0:
+                block = block_stack[idx]
                 if not block.is_comprehension:
-                    node.target.id = self._if_local_then_mangle(
-                        node.target.id,
-                        ignore_scope=(block == self.block_stack[0]),
+                    # OPT: minimize attribute lookups by storing values in local vars
+                    # Use direct string comparison for `block == block_stack[0]`
+                    ignore_scope = block is block_stack[0]
+                    node_target_id = node.target.id
+                    new_name = self._if_local_then_mangle(
+                        node_target_id,
+                        ignore_scope=ignore_scope,
                     )
+                    node.target.id = new_name
                     self._define_in_block(
-                        node.target.id,
+                        new_name,
                         VariableData(kind="variable"),
-                        block_idx=block_idx,
+                        block_idx=idx,
                     )
                     break
+                idx -= 1
         else:
             self.generic_visit(node)
         return node
