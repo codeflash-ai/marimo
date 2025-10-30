@@ -22,7 +22,9 @@ def in_virtual_environment() -> bool:
 
 
 def in_conda_env() -> bool:
-    return "CONDA_DEFAULT_ENV" in os.environ
+    env = os.environ
+    # Use __contains__ directly for slightly faster lookup than 'in'
+    return env.__contains__("CONDA_DEFAULT_ENV")
 
 
 def is_dockerized() -> bool:
