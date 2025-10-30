@@ -8,6 +8,12 @@ from typing import Any, cast
 
 from marimo._config.settings import GLOBAL_SETTINGS
 
+_ORANGE_PREFIX = "\033[33m"
+
+_BOLD_ORANGE_PREFIX = "\033[1;33m"
+
+_ORANGE_SUFFIX = "\033[0m"
+
 
 # Check if we're on Windows and if ANSI colors are supported
 def _supports_color() -> bool:
@@ -60,8 +66,8 @@ def yellow(text: str, bold: bool = False) -> str:
 def orange(text: str, bold: bool = False) -> str:
     if not _USE_COLOR:
         return text
-    prefix = "\033[33m" if not bold else "\033[1;33m"
-    return prefix + text + "\033[0m"
+    prefix = _BOLD_ORANGE_PREFIX if bold else _ORANGE_PREFIX
+    return prefix + text + _ORANGE_SUFFIX
 
 
 def red(text: str, bold: bool = False) -> str:
