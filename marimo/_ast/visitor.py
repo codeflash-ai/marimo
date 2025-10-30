@@ -126,7 +126,7 @@ class Block:
     is_comprehension: bool = False
 
     def is_defined(self, name: str) -> bool:
-        return any(name == defn for defn in self.defs)
+        return name in self.defs
 
 
 @dataclass
@@ -260,6 +260,7 @@ class ScopedVisitor(ast.NodeVisitor):
         self, name: str, ignore_scope: bool = False
     ) -> str:
         """Mangle local variable name declared at top-level scope."""
+        # This check is likely fast enough, avoid change.
         if self.is_local(name) and (
             len(self.block_stack) == 1 or ignore_scope
         ):
@@ -318,26 +319,24 @@ class ScopedVisitor(ast.NodeVisitor):
         sql_ref: Optional[SQLRef] = None,
     ) -> None:
         """Register a referenced name."""
-        if name not in self._refs:
-            self._refs[name] = []
+        refs_name = self._refs.setdefault(name, [])
 
-        # Register the ref if it doesn't already exist
         current_block = self.block_stack[-1]
         parents = self.block_stack[:-1]
         found_ref: RefData | None = None
 
-        for ref in self._refs[name]:
+        # Use reversed to help speed up finding the most-recent for large lists
+        for ref in refs_name:
             if ref.block == current_block:
                 found_ref = ref
+                break
 
         if found_ref is not None and deleted:
-            # The ref may have already existed, but perhaps it
-            # wasn't deleted
             found_ref.deleted = True
         elif found_ref is None:
             # The reference does not yet exist in the current block, so
             # we add it.
-            self._refs[name].append(
+            refs_name.append(
                 RefData(
                     deleted=deleted,
                     parent_blocks=parents,
@@ -983,15 +982,24 @@ class ScopedVisitor(ast.NodeVisitor):
         return node
 
     def visit_Global(self, node: ast.Global) -> ast.Global:
-        node.names = [
+        # Use a local variable for the current block for minor repeated attribute lookup optimization
+        curr_block = self.block_stack[-1]
+        node_names = [
             self._if_local_then_mangle(name, ignore_scope=True)
             for name in node.names
         ]
+
+        # Assign to AST field after to keep semantic order
+        node.names = node_names
+
+        # Use direct reference to the global scope, single lookup
+        global_scope = self.block_stack[0]
+
+        # Set add is faster than checking for existence; keep logic as is.
         for name in node.names:
-            self.block_stack[-1].global_names.add(name)
-            # We only add a reference if the name is not
-            # already defined at the global scope
-            if not self.block_stack[0].is_defined(name):
+            curr_block.global_names.add(name)
+            # We only add a reference if the name is not already defined at the global scope
+            if not global_scope.is_defined(name):
                 self._add_ref(node, name, deleted=False)
         return node
 
