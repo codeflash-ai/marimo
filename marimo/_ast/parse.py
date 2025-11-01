@@ -787,20 +787,18 @@ def is_equal_ast(
 def get_valid_decorator(
     node: CellNode,
 ) -> Optional[Union[ast.Attribute, ast.Call]]:
-    valid_decorators = (
-        "cell",
-        "function",
-        "class_definition",
-    )
+    # Convert tuple to set for O(1) lookup
+    valid_decorators = {"cell", "function", "class_definition"}
     for decorator in node.decorator_list:
-        if (
-            isinstance(decorator, ast.Call)
-            and getattr(decorator.func, "attr", None) in valid_decorators
-        ) or (
-            isinstance(decorator, ast.Attribute)
-            and decorator.attr in valid_decorators
-        ):
-            return decorator
+        # Cache decorator.attr for ast.Attribute
+        if isinstance(decorator, ast.Attribute):
+            if decorator.attr in valid_decorators:
+                return decorator
+        # Only check getattr if isinstance is ast.Call
+        elif isinstance(decorator, ast.Call):
+            attr = getattr(decorator.func, "attr", None)
+            if attr in valid_decorators:
+                return decorator
     return None
 
 
