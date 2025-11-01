@@ -634,28 +634,58 @@ def _eval_kwargs(
     """Convert a list of keyword arguments to a dictionary."""
     kwargs = {}
     violations = []
+
+    # Local references for attribute lookup performance
+    violation_type = Violation
+    violation_msg = UNEXPECTED_KEYWORD_VALUE_VIOLATION
+    is_constant = ast.Constant
+    is_list = ast.List
+
+    # Avoid repeated attribute lookups and repeated isinstance checks
     for kw in keywords:
-        # Only accept Constants, or lists of constants
-        if kw.arg and isinstance(kw.value, ast.Constant):
-            kwargs[kw.arg] = kw.value.value
-        elif kw.arg and isinstance(kw.value, ast.List):
-            list_values = []
-            for elt in kw.value.elts:
-                if isinstance(elt, ast.Constant):
-                    list_values.append(elt.value)
-                else:
-                    violations.append(
-                        Violation(
-                            UNEXPECTED_KEYWORD_VALUE_VIOLATION,
-                            lineno=elt.lineno,
-                            col_offset=elt.col_offset,
+        arg = kw.arg
+        val = kw.value
+        if arg:
+            val_type = type(val)
+            if val_type is is_constant:
+                kwargs[arg] = val.value
+            elif val_type is is_list:
+                elts = val.elts
+                # Collect values or violations for non-Constant elements
+                # Preallocating list_values to len(elts) if nonzero (memory optimization)
+                list_values = [None] * len(elts) if elts else []
+                has_violation = False
+                for idx, elt in enumerate(elts):
+                    if type(elt) is is_constant:
+                        list_values[idx] = elt.value
+                    else:
+                        violations.append(
+                            violation_type(
+                                violation_msg,
+                                lineno=elt.lineno,
+                                col_offset=elt.col_offset,
+                            )
                         )
+                        has_violation = True
+                # Only include values for ast.Constant elements (ignore None placeholders)
+                if has_violation:
+                    # Remove Nones for non-Constant elements
+                    kwargs[arg] = [v for v in list_values if v is not None]
+                else:
+                    # All constants, just assign
+                    kwargs[arg] = list_values
+            else:
+                violations.append(
+                    violation_type(
+                        violation_msg,
+                        lineno=kw.lineno,
+                        col_offset=kw.col_offset,
                     )
-            kwargs[kw.arg] = list_values
+                )
         else:
             violations.append(
-                Violation(
-                    UNEXPECTED_KEYWORD_VALUE_VIOLATION,
+                violation_type(
+                    violation_msg,
                     lineno=kw.lineno,
                     col_offset=kw.col_offset,
                 )
