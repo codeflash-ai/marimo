@@ -836,17 +836,34 @@ def is_app_def(node: Node, import_alias: str = "marimo") -> bool:
     #      )
     #    )
     # A bit obnoxious as a huge conditional, but also better for line coverage.
-    return (
-        isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id == "app"
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == import_alias
-        and node.value.func.attr == "App"
-    )
+    #
+    # Optimization: Use early exit pattern (chained ifs), to avoid unnecessary attribute accesses and isinstance checks.
+    # This drastically reduces attribute lookup overhead, especially when failing cases are frequent in large ASTs.
+    if not isinstance(node, ast.Assign):
+        return False
+    # node.targets: sequence of target nodes
+    targets = node.targets
+    if len(targets) != 1:
+        return False
+    target = targets[0]
+    if not isinstance(target, ast.Name):
+        return False
+    if target.id != "app":
+        return False
+    value = node.value
+    if not isinstance(value, ast.Call):
+        return False
+    func = value.func
+    if not isinstance(func, ast.Attribute):
+        return False
+    func_value = func.value
+    if not isinstance(func_value, ast.Name):
+        return False
+    if func_value.id != import_alias:
+        return False
+    if func.attr != "App":
+        return False
+    return True
 
 
 def is_cell_decorator(
