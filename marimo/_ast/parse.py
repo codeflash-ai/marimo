@@ -598,6 +598,9 @@ class PeekStack(Generic[U]):
             self._next = None
         return self._next
 
+    def __iter__(self):
+        return self
+
 
 def _maybe_kwargs(
     node: Optional[ast.expr],
@@ -674,25 +677,48 @@ def extract_offsets_post_colon(
     # comments --- we have to use tokenize because the ast treats the first
     # line of code as the starting line of the function body, whereas we
     # want the first indented line after the signature
+    # tokenize to find the start of the function body, including
+    # comments --- we have to use tokenize because the ast treats the first
+    # line of code as the starting line of the function body, whereas we
+    # want the first indented line after the signature
+
+    # Minor optimization: use local variable for frequently used token_types fields
+    NAME = token_types.NAME
+    OP = token_types.OP
+    NEWLINE = token_types.NEWLINE
+    COMMENT = token_types.COMMENT
+
     tokens = PeekStack(
         tokenize(io.BytesIO(function_code.encode("utf-8")).readline)
     )
 
     def_node: Optional[TokenInfo] = None
-    while token := next(tokens):
-        if token.type == token_types.NAME and token.string == block_start:
+    # Use direct for loop with next() instead of assignment-expr for micro-optimization
+    for token in tokens:
+        if token is None:
+            break
+        if token.type == NAME and token.string == block_start:
             def_node = token
             break
     assert def_node is not None
 
     paren_counter: Optional[int] = None
     token = tokens.peek()
-    while token := next(tokens):
-        if token.type == token_types.OP and token.string == "(":
-            paren_counter = 1 if paren_counter is None else paren_counter + 1
-        elif token.type == token_types.OP and token.string == ")":
-            assert paren_counter is not None
-            paren_counter -= 1
+    for token in tokens:
+        if token is None:
+            break
+        if token.type == OP:
+            if token.string == "(":
+                if paren_counter is None:
+                    paren_counter = 1
+                else:
+                    paren_counter += 1
+            elif token.string == ")":
+                assert paren_counter is not None
+                paren_counter -= 1
+
+        # Paren counter is initially _None_
+        # So this doesn't activate until we see the first paren.
 
         # NB. Paren counter is initially _None_
         # So this doesn't activate until we see the first paren.
@@ -702,8 +728,8 @@ def extract_offsets_post_colon(
             # In the setup block case, parens are not bound to be present.
             next_token = tokens.peek()
             if (
-                next_token
-                and next_token.type == token_types.OP
+                next_token is not None
+                and next_token.type == OP
                 and next_token.string == ":"
             ):
                 paren_counter = 0
@@ -711,25 +737,28 @@ def extract_offsets_post_colon(
 
     assert paren_counter == 0
 
-    while token := next(tokens):
-        if token.type == token_types.OP and token.string == ":":
+    # Next: find colon token
+    for token in tokens:
+        if token is None:
+            break
+        if token.type == OP and token.string == ":":
             break
 
     after_colon = next(tokens)
-    assert after_colon
+    assert after_colon is not None
     start_line: int
     start_col: int
-    if after_colon.type == token_types.NEWLINE:
+    if after_colon.type == NEWLINE:
         fn_body_token = next(tokens)
-        assert fn_body_token
+        assert fn_body_token is not None
         start_line = fn_body_token.start[0] - 1
         start_col = 0
-    elif after_colon.type == token_types.COMMENT:
+    elif after_colon.type == COMMENT:
         newline_token = next(tokens)
-        assert newline_token
-        assert newline_token.type == token_types.NEWLINE
+        assert newline_token is not None
+        assert newline_token.type == NEWLINE
         fn_body_token = next(tokens)
-        assert fn_body_token
+        assert fn_body_token is not None
         start_line = fn_body_token.start[0] - 1
         start_col = 0
     else:
