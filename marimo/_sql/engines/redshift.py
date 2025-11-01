@@ -303,9 +303,12 @@ class RedshiftEngine(SQLConnection["Connection"]):
         table_name: str,
     ) -> tuple[tuple[str, ...], ...]:
         """The API is unreliable hence this method is not preferred"""
-        columns: tuple[tuple[str, ...], ...] = ()
-        with self._connection.cursor() as cursor:
-            try:
+        # Elide the redundant type annotation and initialization of columns,
+        # simply assign on success.
+        try:
+            with self._connection.cursor() as cursor:
+                # get_columns returns:
+                # [[catalog, schema, table_name, column_name, unknown, data type, unknown, ...], ...]
                 # get_columns returns:
                 # [[catalog, schema, table_name, column_name, unknown, data type, unknown, ...], ...]
                 columns = cursor.get_columns(
@@ -313,11 +316,18 @@ class RedshiftEngine(SQLConnection["Connection"]):
                     schema_pattern=schema_name,
                     tablename_pattern=table_name,
                 )
-            except Exception as e:
-                LOGGER.debug(
-                    f"Failed to get columns for {catalog}.{schema_name}.{table_name} Reason: {e}"
-                )
-            return columns
+        except Exception as e:
+            # Delay f-string formatting to inside the log call to avoid
+            # unnecessary string creation if debug logging is disabled.
+            LOGGER.debug(
+                "Failed to get columns for %s.%s.%s Reason: %s",
+                catalog,
+                schema_name,
+                table_name,
+                e,
+            )
+            return ()
+        return columns
 
     def get_table_details(
         self, *, table_name: str, schema_name: str, database_name: str
