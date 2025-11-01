@@ -865,15 +865,24 @@ def is_cell_decorator(
 
 
 def is_unparsable_cell(node: Node) -> bool:
-    return (
-        isinstance(node, ast.Expr)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == "app"
-        and node.value.func.attr == "_unparsable_cell"
-        and len(node.value.args) == 1
-    )
+    if type(node) is not ast.Expr:
+        return False
+    value = node.value
+    if type(value) is not ast.Call:
+        return False
+    func = value.func
+    if type(func) is not ast.Attribute:
+        return False
+    func_value = func.value
+    if type(func_value) is not ast.Name:
+        return False
+    if func_value.id != "app":
+        return False
+    if func.attr != "_unparsable_cell":
+        return False
+    if len(value.args) != 1:
+        return False
+    return True
 
 
 def is_body_cell(node: Node) -> bool:
