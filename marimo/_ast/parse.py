@@ -787,17 +787,21 @@ def is_equal_ast(
 def get_valid_decorator(
     node: CellNode,
 ) -> Optional[Union[ast.Attribute, ast.Call]]:
-    valid_decorators = (
-        "cell",
-        "function",
-        "class_definition",
-    )
-    for decorator in node.decorator_list:
-        if (
-            isinstance(decorator, ast.Call)
-            and getattr(decorator.func, "attr", None) in valid_decorators
-        ) or (
-            isinstance(decorator, ast.Attribute)
+    # Precompute set for O(1) lookups, no behavioral change
+    valid_decorators = {"cell", "function", "class_definition"}
+    decorator_list = node.decorator_list
+
+    for decorator in decorator_list:
+        # Cache type checks and attrs for efficiency
+        # Avoid getattr overhead by checking type first
+        if type(decorator) is ast.Call:
+            func = decorator.func
+            # Only ast.Attribute could have .attr and be valid
+            # This branch avoids unnecessary getattr, and only checks if func is ast.Attribute
+            if type(func) is ast.Attribute and func.attr in valid_decorators:
+                return decorator
+        elif (
+            type(decorator) is ast.Attribute
             and decorator.attr in valid_decorators
         ):
             return decorator
@@ -853,36 +857,49 @@ def is_cell_decorator(
     decorator: ast.expr,
     allowed: tuple[str, ...] = ("cell", "function", "class_definition"),
 ) -> bool:
-    if isinstance(decorator, ast.Attribute):
+    # Tighten type checks for faster match
+    # The allowed tuple is not large; set is not measurably faster in this context
+    if type(decorator) is ast.Attribute:
+        value = decorator.value
         return (
-            isinstance(decorator.value, ast.Name)
-            and decorator.value.id == "app"
+            type(value) is ast.Name
+            and value.id == "app"
             and decorator.attr in allowed
         )
-    elif isinstance(decorator, ast.Call):
+    elif type(decorator) is ast.Call:
+        # Recursively handle ast.Call
         return is_cell_decorator(decorator.func)
     return False
 
 
 def is_unparsable_cell(node: Node) -> bool:
+    # Unroll type checks for efficiency; cache intermediate objects
+    if type(node) is not ast.Expr:
+        return False
+    value = node.value
+    if type(value) is not ast.Call:
+        return False
+    func = value.func
+    if type(func) is not ast.Attribute:
+        return False
+    func_value = func.value
+    if type(func_value) is not ast.Name:
+        return False
     return (
-        isinstance(node, ast.Expr)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and isinstance(node.value.func.value, ast.Name)
-        and node.value.func.value.id == "app"
-        and node.value.func.attr == "_unparsable_cell"
-        and len(node.value.args) == 1
+        func_value.id == "app"
+        and func.attr == "_unparsable_cell"
+        and len(value.args) == 1
     )
 
 
 def is_body_cell(node: Node) -> bool:
     # should have decorator @app.cell, @app.function, @app.class_definition
-    return (
-        isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef, ast.ClassDef))
-        and (decorator := get_valid_decorator(node))
-        and is_cell_decorator(decorator)
-    ) or is_unparsable_cell(node)
+    # Check hack: type(node) instead of isinstance for known types
+    if type(node) in (ast.AsyncFunctionDef, ast.FunctionDef, ast.ClassDef):
+        decorator = get_valid_decorator(node)
+        if decorator and is_cell_decorator(decorator):
+            return True
+    return is_unparsable_cell(node)
 
 
 def _is_setup_call(node: Node) -> bool:
