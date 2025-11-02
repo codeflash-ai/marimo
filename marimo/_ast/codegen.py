@@ -178,15 +178,19 @@ def to_annotated_string(
     response: dict[str, str] = {}
     if not variable_data:
         return response
+    get_variable = variable_data.get
     for name in names:
-        if name in variable_data and variable_data[name]:
-            variable = variable_data[name]
-            annotation = variable.annotation_data
-            if annotation:
-                if annotation.refs - allowed_refs:
-                    response[name] = f'"{annotation.repr}"'
-                else:
-                    response[name] = annotation.repr
+        variable = get_variable(name)
+        if not variable:
+            continue
+        annotation = variable.annotation_data
+        if not annotation:
+            continue
+        # Avoid constructing a set if refs is empty, and use isdisjoint for efficiency
+        if annotation.refs and not annotation.refs.issubset(allowed_refs):
+            response[name] = f'"{annotation.repr}"'
+        else:
+            response[name] = annotation.repr
     return response
 
 
