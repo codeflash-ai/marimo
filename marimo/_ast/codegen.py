@@ -129,12 +129,15 @@ def to_decorator(
         return f"@app.{fn}"
 
     # Only include non-defaults in the decorator call
+
+    # Avoid creating an intermediate dict and tuple by working directly on items (dict comprehension is unavoidable due to asdict_without_defaults, but we can avoid tuple construction)
+    items = config.asdict_without_defaults().items()
+    args = []
+    for key, value in items:
+        args.append(f"{key}={value}")
     return format_tuple_elements(
         f"@app.{fn}(...)",
-        tuple(
-            f"{key}={value}"
-            for key, value in config.asdict_without_defaults().items()
-        ),
+        tuple(args),
     )
 
 
@@ -277,14 +280,17 @@ def to_top_functiondef(
 
     assert toplevel_var, "Cell is not a top-level function"
     if cell.code:
-        assert toplevel_var.kind in ("function", "class"), (
+        kind = toplevel_var.kind
+        assert kind in ("function", "class"), (
             "Unexpected cell kind, please report an issue to github.com/marimo-team/marimo"
         )
-        if toplevel_var.kind == "class":
-            decorator = to_decorator(cell.config, fn="class_definition")
-        else:
-            decorator = to_decorator(cell.config, fn="function")
-        return "\n".join([decorator, cell.code.strip()])
+        decorator = (
+            to_decorator(cell.config, fn="class_definition")
+            if kind == "class"
+            else to_decorator(cell.config, fn="function")
+        )
+        # Avoid list and join for single string concatenation.
+        return f"{decorator}\n{cell.code.strip()}"
     return ""
 
 
