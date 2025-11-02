@@ -5,7 +5,6 @@ import ast
 import os
 import re
 import sys
-import textwrap
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from marimo import _loggers
@@ -67,7 +66,10 @@ def pop_setup_cell(
 
 
 def indent_text(text: str) -> str:
-    return textwrap.indent(text, INDENT)
+    return "".join(
+        INDENT + line if line.strip() else line
+        for line in text.splitlines(keepends=True)
+    )
 
 
 def _format_arg(arg: Any) -> str:
@@ -115,9 +117,9 @@ def format_tuple_elements(
     if len(elems) == 1:
         elems = (elems[0].strip(","),)
 
-    multiline_tuple = "\n".join(
-        [left, indent_text(",\n".join(elems)) + ",", right]
-    )
+    # Precompute joined comma-lines, reusing INDENT and string computation
+    joined_elems = ",\n".join(elems)
+    multiline_tuple = f"{left}\n{indent_text(joined_elems)},\n{right}"
     return maybe_indent(code.replace("(...)", multiline_tuple))
 
 
