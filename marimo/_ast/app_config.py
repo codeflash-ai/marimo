@@ -74,12 +74,16 @@ class _AppConfig:
         return self
 
     def asdict_difference(self) -> dict[str, Any]:
-        default_config = _AppConfig().asdict()
-        updates = self.asdict()
-        for key in default_config:
-            if updates[key] == default_config[key]:
-                updates.pop(key)
-        return updates
+        # Create an instance of the default _AppConfig
+        default_config = _AppConfig().__dict__.copy()
+        # Get current instance variables as dict
+        updates = self.__dict__
+        # Compute only the differing values
+        return {
+            key: value
+            for key, value in updates.items()
+            if key in default_config and value != default_config[key]
+        }
 
 
 def overloads_from_env() -> _AppConfig:
