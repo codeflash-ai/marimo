@@ -100,10 +100,18 @@ def _normalize_sandbox_dependencies(
 
         return dep.replace("marimo", f"marimo[{','.join(features)}]")
 
-    # Find all marimo dependencies
-    marimo_deps = [d for d in dependencies if is_marimo_dependency(d)]
+    # Precompute marimo-related info for efficiency
+    marimo_deps = []
+    non_marimo_deps = []
+    for d in dependencies:
+        if is_marimo_dependency(d):
+            marimo_deps.append(d)
+        else:
+            non_marimo_deps.append(d)
+
     if not marimo_deps:
-        if is_editable("marimo"):
+        editable = is_editable("marimo")
+        if editable:
             LOGGER.info("Using editable of marimo for sandbox")
             return dependencies + [f"-e {get_marimo_dir()}"]
 
@@ -111,22 +119,23 @@ def _normalize_sandbox_dependencies(
             include_features(f"marimo=={marimo_version}", additional_features)
         ]
 
-    # Prefer the one with brackets if it exists
-    bracketed = next((d for d in marimo_deps if "[" in d), None)
-    chosen = bracketed if bracketed else marimo_deps[0]
+    # Pick bracketed marimo dep if present, else first marimo dep
+    chosen = next((d for d in marimo_deps if "[" in d), None)
+    if not chosen:
+        chosen = marimo_deps[0]
 
-    # Remove all marimo deps
-    filtered = [d for d in dependencies if not is_marimo_dependency(d)]
-
-    if is_editable("marimo"):
+    editable = is_editable("marimo")
+    if editable:
         LOGGER.info("Using editable of marimo for sandbox")
-        return filtered + [f"-e {get_marimo_dir()}"]
+        return non_marimo_deps + [f"-e {get_marimo_dir()}"]
+
+    # Add version if not already versioned
 
     # Add version if not already versioned
     if not _is_versioned(chosen):
         chosen = f"{chosen}=={marimo_version}"
 
-    return filtered + [include_features(chosen, additional_features)]
+    return non_marimo_deps + [include_features(chosen, additional_features)]
 
 
 def _uv_export_script_requirements_txt(
