@@ -10,6 +10,12 @@ if TYPE_CHECKING:
 
 from marimo import _loggers
 
+_LINE_COL_REGEX = re.compile(r"Line (\d+), Col: (\d+)")
+
+_LINE_ONLY_REGEX = re.compile(r"LINE (\d+):")
+
+_SQLGLOT_REGEX = re.compile(r"line (\d+), col (\d+)", re.IGNORECASE)
+
 LOGGER = _loggers.marimo_logger()
 
 
@@ -102,30 +108,28 @@ def _extract_sql_position(
     exception_msg: str,
 ) -> tuple[Optional[int], Optional[int]]:
     """Extract line and column position from SQL exception message."""
-    # SqlGlot format: "Line 1, Col: 15"
-    line_col_match = re.search(r"Line (\d+), Col: (\d+)", exception_msg)
-    if line_col_match:
+    # Try to match SqlGlot format: "Line 1, Col: 15"
+    match = _LINE_COL_REGEX.search(exception_msg)
+    if match:
         return (
-            int(line_col_match.group(1)) - 1,  # Convert to 0-based
-            int(line_col_match.group(2)) - 1,
+            int(match.group(1)) - 1,  # Convert to 0-based
+            int(match.group(2)) - 1,
         )
 
-    # DuckDB format: "LINE 4:" (line only)
-    line_only_match = re.search(r"LINE (\d+):", exception_msg)
-    if line_only_match:
+    # Try to match DuckDB format: "LINE 4:" (line only)
+    match = _LINE_ONLY_REGEX.search(exception_msg)
+    if match:
         return (
-            int(line_only_match.group(1)) - 1,  # Convert to 0-based
+            int(match.group(1)) - 1,  # Convert to 0-based
             None,  # No column information
         )
 
-    # SQLGlot format variations
-    sqlglot_match = re.search(
-        r"line (\d+), col (\d+)", exception_msg, re.IGNORECASE
-    )
-    if sqlglot_match:
+    # Try to match SQLGlot format variations
+    match = _SQLGLOT_REGEX.search(exception_msg)
+    if match:
         return (
-            int(sqlglot_match.group(1)) - 1,
-            int(sqlglot_match.group(2)) - 1,
+            int(match.group(1)) - 1,
+            int(match.group(2)) - 1,
         )
 
     return None, None
