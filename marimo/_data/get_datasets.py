@@ -70,20 +70,28 @@ def _get_data_table(
 def has_updates_to_datasource(query: str) -> bool:
     import duckdb  # type: ignore[import-not-found,import-untyped,unused-ignore] # noqa: E501
 
+    # Fast keyword check to avoid expensive parsing
+    query_lower = query.strip().lower()
+    if not any(
+        keyword in query_lower
+        for keyword in ("attach", "detach", "alter", "create")
+    ):
+        return False
+
     try:
         statements = duckdb.extract_statements(query.strip())
     except Exception:
         # May not be valid SQL
         return False
 
-    return any(
-        statement.type == duckdb.StatementType.ATTACH
-        or statement.type == duckdb.StatementType.DETACH
-        or statement.type == duckdb.StatementType.ALTER
-        # This may catch some false positives for other CREATE statements
-        or statement.type == duckdb.StatementType.CREATE
-        for statement in statements
-    )
+    target_types = {
+        duckdb.StatementType.ATTACH,
+        duckdb.StatementType.DETACH,
+        duckdb.StatementType.ALTER,
+        duckdb.StatementType.CREATE,
+    }
+
+    return any(statement.type in target_types for statement in statements)
 
 
 def execute_duckdb_query(
