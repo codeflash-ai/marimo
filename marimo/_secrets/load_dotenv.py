@@ -75,9 +75,10 @@ def load_to_environ(env_dict: dict[str, Optional[str]]) -> None:
 
 def _drop_quotes(value: str) -> str:
     # Handle quoted values (both single and double quotes)
-    if (value.startswith("'") and value.endswith("'")) or (
-        value.startswith('"') and value.endswith('"')
-    ):
-        return value[1:-1]
-
+    if value:
+        first = value[0]
+        last = value[-1]
+        # Check for both types of quotes using direct indexing for better perf
+        if (first == last) and (first == "'" or first == '"'):
+            return value[1:-1]
     return value
