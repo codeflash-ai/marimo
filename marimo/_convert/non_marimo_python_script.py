@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 
 from marimo._convert.ipynb import convert_from_ipynb_to_notebook_ir
 from marimo._schemas.serialization import (
@@ -82,7 +83,8 @@ def convert_non_marimo_python_script_to_notebook_ir(
 
     if "# %%" in source:
         return convert_pypercent_script_to_notebook_ir(source)
-    return convert_python_block_to_notebook_ir(source)
+    # Use the cached deterministic conversion for standard Python scripts
+    return _cached_convert_python_block_to_notebook_ir(source)
 
 
 def convert_non_marimo_script_to_notebook_ir(
@@ -122,3 +124,11 @@ def _transform_main_blocks(ir: NotebookSerialization) -> None:
                 cell.code = before_main + "\n\n" + main_block
             else:
                 cell.code = main_block
+
+
+# LRU cache for the most common deterministic conversion
+@lru_cache(maxsize=64)
+def _cached_convert_python_block_to_notebook_ir(
+    source: str,
+) -> NotebookSerialization:
+    return convert_python_block_to_notebook_ir(source)
