@@ -8,7 +8,8 @@ class Disposable:
         self._is_disposed = False
 
     def __call__(self) -> None:
-        return self.dispose()
+        self.action()
+        self._is_disposed = True
 
     def dispose(self) -> None:
         self.action()
