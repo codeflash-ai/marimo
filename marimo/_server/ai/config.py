@@ -74,13 +74,34 @@ class AnyProviderConfig:
     @classmethod
     def for_ollama(cls, config: AiConfig) -> AnyProviderConfig:
         default_base_url = "http://127.0.0.1:11434/v1"
-        return cls._for_openai_like(
-            config,
-            "ollama",
+        ai_config: dict[str, Any] = _get_ai_config(config, "ollama")
+        key = _get_key(
+            ai_config,
             "Ollama",
             fallback_key="ollama-placeholder",
-            fallback_base_url=default_base_url,
+            require_key=False,
         )
+
+        base_url = _get_base_url(ai_config) or default_base_url
+        mode = config.get("mode", "manual")
+
+        kwargs: dict[str, Any] = {
+            "base_url": base_url,
+            "api_key": key,
+            "ssl_verify": ai_config.get("ssl_verify", True),
+            "ca_bundle_path": ai_config.get("ca_bundle_path")
+            if "ca_bundle_path" in ai_config
+            else None,
+            "client_pem": ai_config.get("client_pem")
+            if "client_pem" in ai_config
+            else None,
+            "extra_headers": ai_config.get("extra_headers")
+            if "extra_headers" in ai_config
+            else None,
+            "tools": _get_tools(mode),
+        }
+
+        return AnyProviderConfig(**kwargs)
 
     @classmethod
     def for_github(cls, config: AiConfig) -> AnyProviderConfig:
