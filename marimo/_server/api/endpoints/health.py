@@ -22,6 +22,8 @@ from marimo._version import __version__
 if TYPE_CHECKING:
     from starlette.requests import Request
 
+_PLAIN_TEXT_RESPONSE = PlainTextResponse(__version__)
+
 LOGGER = _loggers.marimo_logger()
 
 # Router for health/status endpoints
@@ -103,7 +105,7 @@ async def version(request: Request) -> PlainTextResponse:
                         type: string
     """
     del request  # Unused
-    return PlainTextResponse(__version__)
+    return _PLAIN_TEXT_RESPONSE
 
 
 @router.get("/api/usage")
