@@ -119,19 +119,41 @@ class AnyProviderConfig:
         fallback_base_url: Optional[str] = None,
         require_key: bool = False,
     ) -> AnyProviderConfig:
-        ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        # Reduce local lookups for global function names
+        get_ai_config = _get_ai_config
+        get_key = _get_key
+        get_base_url = _get_base_url
+        get_tools = _get_tools
+
+        ai_config: dict[str, Any] = get_ai_config(config, key)
+        api_key = get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
 
+        # Fast local vars for config.get lookups, single dict lookup per key
+        ssl_verify = ai_config.get("ssl_verify", True)
+        ca_bundle_path = ai_config.get("ca_bundle_path", None)
+        client_pem = ai_config.get("client_pem", None)
+        extra_headers = ai_config.get("extra_headers", None)
+
+        # Carefully evaluate fallback logic efficiently
+        base_url = get_base_url(ai_config)
+        if base_url is None:
+            base_url = fallback_base_url
+
+        # Avoid repeated config.get by using var
+        mode = config.get("mode", "manual")
+        tools = get_tools(mode)
+
+        # Prepare kwargs dictionary directly.
         kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
-            "ssl_verify": ai_config.get("ssl_verify", True),
-            "ca_bundle_path": ai_config.get("ca_bundle_path", None),
-            "client_pem": ai_config.get("client_pem", None),
-            "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
+            "base_url": base_url,
+            "api_key": api_key,
+            "ssl_verify": ssl_verify,
+            "ca_bundle_path": ca_bundle_path,
+            "client_pem": client_pem,
+            "extra_headers": extra_headers,
+            "tools": tools,
         }
 
         return AnyProviderConfig(**kwargs)
