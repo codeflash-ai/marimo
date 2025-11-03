@@ -8,6 +8,14 @@ from marimo._dependencies.dependencies import DependencyManager
 if TYPE_CHECKING:
     from pathlib import Path
 
+_toml_backend_checked = False
+
+_tomlkit_available = None
+
+_TOMLKitError = None
+
+_TOMLDecodeError = None
+
 
 def read_toml(file_path: Union[str, Path]) -> dict[str, Any]:
     """Read and parse a TOML file."""
@@ -43,12 +51,27 @@ def read_toml_string(s: str) -> dict[str, Any]:
 
 def is_toml_error(e: Exception) -> bool:
     """Check if an exception is a TOML error."""
-
-    if DependencyManager.tomlkit.has():
-        import tomlkit
-
-        return isinstance(e, tomlkit.exceptions.TOMLKitError)
+    _detect_toml_backend()
+    if _tomlkit_available:
+        return isinstance(e, _TOMLKitError)
     else:
-        import tomllib
+        return isinstance(e, _TOMLDecodeError)
 
-        return isinstance(e, tomllib.TOMLDecodeError)
+
+def _detect_toml_backend():
+    global \
+        _toml_backend_checked, \
+        _tomlkit_available, \
+        _TOMLKitError, \
+        _TOMLDecodeError
+    if not _toml_backend_checked:
+        _toml_backend_checked = True
+        _tomlkit_available = DependencyManager.tomlkit.has()
+        if _tomlkit_available:
+            import tomlkit
+
+            _TOMLKitError = tomlkit.exceptions.TOMLKitError
+        else:
+            import tomllib
+
+            _TOMLDecodeError = tomllib.TOMLDecodeError
