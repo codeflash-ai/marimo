@@ -21,6 +21,12 @@ from marimo._plugins.ui._impl import tabs
 from marimo._plugins.ui._impl.table import get_default_table_page_size, table
 from marimo._runtime.patches import patch_polars_write_json
 
+_EDGE_REGEX = re.compile(r"(?P<node1>\w+) -- (?P<node2>\w+)")
+
+_NODE_REGEX = re.compile(r"(?P<node>\w+)(\s+)?\[label=\"(?P<label>.*)\"]")
+
+_URL_REGEX = re.compile(r"\[(https?://[^\]]+)\]")
+
 LOGGER = _loggers.marimo_logger()
 
 
@@ -46,23 +52,23 @@ def polars_dot_to_mermaid(dot: str) -> str:
     Note: Not comprehensive, only handles components of the dot language used by polars.
     """
 
-    edge_regex = r"(?P<node1>\w+) -- (?P<node2>\w+)"
-    node_regex = r"(?P<node>\w+)(\s+)?\[label=\"(?P<label>.*)\"]"
+    # List comprehensions require the iterator to be consumed only once.
+    # Convert iterators to lists up front to avoid recomputation and to maximize
+    # memory locality/performance for string processing.
+    nodes = list(_NODE_REGEX.finditer(dot))
+    edges = list(_EDGE_REGEX.finditer(dot))
 
-    nodes = re.finditer(node_regex, dot)
-    edges = re.finditer(edge_regex, dot)
+    # Precompute node and edge lines
+    node_lines = [f'\t{n["node"]}["{n["label"]}"]' for n in nodes]
+    edge_lines = [f"\t{e['node1']} --- {e['node2']}" for e in edges]
 
-    mermaid_str = "\n".join(
-        [
-            "graph TD",
-            *[f'\t{n["node"]}["{n["label"]}"]' for n in nodes],
-            *[f"\t{e['node1']} --- {e['node2']}" for e in edges],
-        ]
-    )
+    # Directly join all lines
+    mermaid_lines = ["graph TD", *node_lines, *edge_lines]
+    mermaid_str = "\n".join(mermaid_lines)
 
     # replace [https://...] with <a> tags to avoid Mermaid interpreting it as markdown
-    mermaid_str = re.sub(
-        r"\[(https?://[^\]]+)\]",
+    # Use precompiled URL regex for efficient repeated usage
+    mermaid_str = _URL_REGEX.sub(
         lambda m: f"[<a href='{m.group(1)}'>{m.group(1)}</a>]",
         mermaid_str,
     )
