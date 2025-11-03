@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -154,9 +155,9 @@ class AnyProviderConfig:
 
     @classmethod
     def for_google(cls, config: AiConfig) -> AnyProviderConfig:
-        fallback_key = cls.os_key("GEMINI_API_KEY") or cls.os_key(
-            "GOOGLE_API_KEY"
-        )
+        fallback_key = os.environ.get("GEMINI_API_KEY")
+        if fallback_key is None:
+            fallback_key = os.environ.get("GOOGLE_API_KEY")
         ai_config = _get_ai_config(config, "google")
         key = _get_key(
             ai_config,
@@ -213,8 +214,6 @@ class AnyProviderConfig:
 
     @classmethod
     def os_key(cls, key: str) -> Optional[str]:
-        import os
-
         return os.environ.get(key)
 
 
@@ -228,9 +227,12 @@ def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
 
 
 def _get_ai_config(config: AiConfig, key: str) -> dict[str, Any]:
-    if key not in config:
+    # Directly use config[key] if possible for faster access
+    # If config is a dict-like, .get(key, {}) roughly equals the if/return
+    value = config.get(key)
+    if value is None:
         return {}
-    return cast(dict[str, Any], config.get(key, {}))
+    return cast(dict[str, Any], value)
 
 
 def get_chat_model(config: AiConfig) -> str:
@@ -287,22 +289,23 @@ def _get_key(
     config = cast(dict[str, Any], config)
 
     if name == "Bedrock":
-        if "profile_name" in config:
-            profile_name = config.get("profile_name", "")
+        profile_name = config.get("profile_name")
+        if profile_name is not None:
             return f"profile:{profile_name}"
-        elif (
-            "aws_access_key_id" in config and "aws_secret_access_key" in config
-        ):
-            return f"{config['aws_access_key_id']}:{config['aws_secret_access_key']}"
-        else:
-            return ""
+        aws_access_key_id = config.get("aws_access_key_id")
+        aws_secret_access_key = config.get("aws_secret_access_key")
+        if aws_access_key_id is not None and aws_secret_access_key is not None:
+            return f"{aws_access_key_id}:{aws_secret_access_key}"
+        return ""
 
-    if "api_key" in config:
-        key = config["api_key"]
-        if key:
-            return cast(str, key)
+    # Fast path: api_key present and set
+    key = config.get("api_key")
+    if key:
+        return cast(str, key)
 
-    if "http://127.0.0.1:11434/" in config.get("base_url", ""):
+    # Fast local ollama path
+    base_url = config.get("base_url")
+    if base_url and "http://127.0.0.1:11434/" in base_url:
         # Ollama can be configured and in that case the api key is not needed.
         # We send a placeholder value to prevent the user from being confused.
         return "ollama-placeholder"
@@ -322,22 +325,24 @@ def _get_key(
 def _get_base_url(config: Any, name: str = "") -> Optional[str]:
     """Get the base URL for a given provider."""
     if not isinstance(config, dict):
-        if name:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail=f"{name} is not configured. Go to Settings > AI to configure.",
-            )
-        else:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Invalid config. Go to Settings > AI to configure.",
-            )
+        detail = (
+            f"{name} is not configured. Go to Settings > AI to configure."
+            if name
+            else "Invalid config. Go to Settings > AI to configure."
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=detail,
+        )
 
     if name == "Bedrock":
-        if "region_name" in config:
-            return cast(str, config["region_name"])
-        else:
-            return None
-    elif "base_url" in config:
-        return cast(str, config["base_url"])
+        region_name = config.get("region_name")
+        if region_name is not None:
+            return cast(str, region_name)
+        return None
+
+    base_url = config.get("base_url")
+    if base_url is not None:
+        return cast(str, base_url)
+
     return None
