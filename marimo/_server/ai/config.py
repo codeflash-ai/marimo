@@ -175,10 +175,14 @@ class AnyProviderConfig:
     def for_bedrock(cls, config: AiConfig) -> AnyProviderConfig:
         ai_config = _get_ai_config(config, "bedrock")
         key = _get_key(ai_config, "Bedrock")
+        mode = config.get("mode", "manual")
+        # Avoid calling _get_tools() twice by evaluating tools before instantiation
+        # Also, pass the result to the constructor directly
+        tools = _get_tools(mode)
         return cls(
             base_url=_get_base_url(ai_config),
             api_key=key,
-            tools=_get_tools(config.get("mode", "manual")),
+            tools=tools,
         )
 
     @classmethod
@@ -228,9 +232,11 @@ def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
 
 
 def _get_ai_config(config: AiConfig, key: str) -> dict[str, Any]:
-    if key not in config:
+    # Optimize: Direct dictionary .get() and fallback to empty dict
+    cfg = config.get(key)
+    if cfg is None:
         return {}
-    return cast(dict[str, Any], config.get(key, {}))
+    return cast(dict[str, Any], cfg)
 
 
 def get_chat_model(config: AiConfig) -> str:
@@ -287,22 +293,24 @@ def _get_key(
     config = cast(dict[str, Any], config)
 
     if name == "Bedrock":
-        if "profile_name" in config:
-            profile_name = config.get("profile_name", "")
+        profile_name = config.get("profile_name")
+        if profile_name is not None:
             return f"profile:{profile_name}"
-        elif (
-            "aws_access_key_id" in config and "aws_secret_access_key" in config
-        ):
-            return f"{config['aws_access_key_id']}:{config['aws_secret_access_key']}"
-        else:
-            return ""
+        access_key = config.get("aws_access_key_id")
+        secret_key = config.get("aws_secret_access_key")
+        if access_key is not None and secret_key is not None:
+            return f"{access_key}:{secret_key}"
+        return ""
 
-    if "api_key" in config:
-        key = config["api_key"]
-        if key:
-            return cast(str, key)
+    api_key = config.get("api_key")
+    if api_key:
+        return cast(str, api_key)
 
-    if "http://127.0.0.1:11434/" in config.get("base_url", ""):
+    base_url = config.get("base_url", "")
+    # Optimize: move literal comparison out of dict .get
+    if "http://127.0.0.1:11434/" in base_url:
+        # Ollama can be configured and in that case the api key is not needed.
+        # We send a placeholder value to prevent the user from being confused.
         # Ollama can be configured and in that case the api key is not needed.
         # We send a placeholder value to prevent the user from being confused.
         return "ollama-placeholder"
@@ -322,22 +330,25 @@ def _get_key(
 def _get_base_url(config: Any, name: str = "") -> Optional[str]:
     """Get the base URL for a given provider."""
     if not isinstance(config, dict):
-        if name:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail=f"{name} is not configured. Go to Settings > AI to configure.",
-            )
-        else:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Invalid config. Go to Settings > AI to configure.",
-            )
+        msg = (
+            f"{name} is not configured. Go to Settings > AI to configure."
+            if name
+            else "Invalid config. Go to Settings > AI to configure."
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=msg,
+        )
+
+    config = cast(dict[str, Any], config)
 
     if name == "Bedrock":
-        if "region_name" in config:
-            return cast(str, config["region_name"])
-        else:
-            return None
-    elif "base_url" in config:
-        return cast(str, config["base_url"])
+        # Optimize: single get
+        region = config.get("region_name")
+        if region is not None:
+            return cast(str, region)
+        return None
+    base_url = config.get("base_url")
+    if base_url is not None:
+        return cast(str, base_url)
     return None
