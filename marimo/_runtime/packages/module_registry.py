@@ -43,11 +43,12 @@ class ModuleRegistry:
 
     def modules(self) -> set[str]:
         """Modules imported by cells."""
-        return set(
-            mod
-            for cell in self.graph.cells.values()
-            for mod in cell.imported_namespaces
-        )
+        # Using set.update with generator for better performance
+        modules: set[str] = set()
+        cells_values = self.graph.cells.values()
+        for cell in cells_values:
+            modules.update(cell.imported_namespaces)
+        return modules
 
     def missing_modules(self) -> set[str]:
         """Modules that will fail to import."""
