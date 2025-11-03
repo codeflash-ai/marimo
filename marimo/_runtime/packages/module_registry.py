@@ -18,10 +18,23 @@ def _is_module_installed(module_name: str) -> bool:
     # We don't actually need the spec, we just need to see if a package is
     # available, so we first check if the module is in sys.modules without
     # checking for a __spec__ attr.
-    return (
+
+    # Optimization: cache results to avoid repeatedly expensive find_spec calls
+    # This cache is safe since installed modules won't "uninstall" during runtime
+    _installed_module_cache = getattr(_is_module_installed, "_cache", None)
+    if _installed_module_cache is None:
+        _installed_module_cache = {}
+        _is_module_installed._cache = _installed_module_cache
+
+    if module_name in _installed_module_cache:
+        return _installed_module_cache[module_name]
+
+    result = (
         module_name in sys.modules
         or importlib.util.find_spec(module_name) is not None
     )
+    _installed_module_cache[module_name] = result
+    return result
 
 
 class ModuleRegistry:
