@@ -120,21 +120,31 @@ class AnyProviderConfig:
         require_key: bool = False,
     ) -> AnyProviderConfig:
         ai_config: dict[str, Any] = _get_ai_config(config, key)
-        key = _get_key(
+        provider_key = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
 
-        kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
-            "api_key": key,
-            "ssl_verify": ai_config.get("ssl_verify", True),
-            "ca_bundle_path": ai_config.get("ca_bundle_path", None),
-            "client_pem": ai_config.get("client_pem", None),
-            "extra_headers": ai_config.get("extra_headers", None),
-            "tools": _get_tools(config.get("mode", "manual")),
-        }
+        # Store config.get once for tools (mode is only needed here)
+        mode = config.get("mode", "manual")
 
-        return AnyProviderConfig(**kwargs)
+        # Use local variables to avoid repeating dictionary lookups
+        base_url = _get_base_url(ai_config)
+        ssl_verify = ai_config.get("ssl_verify", True)
+        ca_bundle_path = ai_config.get("ca_bundle_path", None)
+        client_pem = ai_config.get("client_pem", None)
+        extra_headers = ai_config.get("extra_headers", None)
+        tools = _get_tools(mode)
+
+        # Avoid unnecessary dict creation by spreading directly
+        return AnyProviderConfig(
+            base_url=base_url or fallback_base_url,
+            api_key=provider_key,
+            ssl_verify=ssl_verify,
+            ca_bundle_path=ca_bundle_path,
+            client_pem=client_pem,
+            extra_headers=extra_headers,
+            tools=tools,
+        )
 
     @classmethod
     def for_anthropic(cls, config: AiConfig) -> AnyProviderConfig:
@@ -215,7 +225,8 @@ class AnyProviderConfig:
     def os_key(cls, key: str) -> Optional[str]:
         import os
 
-        return os.environ.get(key)
+        env = os.environ
+        return env.get(key)
 
 
 def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
