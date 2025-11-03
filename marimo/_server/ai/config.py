@@ -1,6 +1,7 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -22,6 +23,8 @@ from marimo._server.ai.ids import AiModelId
 from marimo._server.ai.tools.tool_manager import get_tool_manager
 from marimo._server.ai.tools.types import ToolDefinition
 from marimo._server.api.status import HTTPStatus
+
+_os_environ = os.environ
 
 
 @dataclass
@@ -213,9 +216,7 @@ class AnyProviderConfig:
 
     @classmethod
     def os_key(cls, key: str) -> Optional[str]:
-        import os
-
-        return os.environ.get(key)
+        return _os_environ.get(key)
 
 
 def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
