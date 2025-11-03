@@ -21,9 +21,13 @@ from marimo._sql.utils import (
 from marimo._types.ids import VariableName
 from marimo._utils.narwhals_utils import can_narwhalify_lazyframe
 
+_MARIMO_SQL_DEFAULT_LIMIT = "MARIMO_SQL_DEFAULT_LIMIT"
+
+_environ_get = os.environ.get
+
 
 def get_default_result_limit() -> Optional[int]:
-    limit = os.environ.get("MARIMO_SQL_DEFAULT_LIMIT")
+    limit = _environ_get(_MARIMO_SQL_DEFAULT_LIMIT)
     return int(limit) if limit is not None else None
 
 
