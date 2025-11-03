@@ -10,6 +10,7 @@ import narwhals.stable.v2 as nw
 
 from marimo import _loggers
 from marimo._messaging.mimetypes import KnownMimeType
+from marimo._output import formatting
 from marimo._output.formatters.formatter_factory import (
     FormatterFactory,
     Unregister,
@@ -21,17 +22,24 @@ from marimo._plugins.ui._impl import tabs
 from marimo._plugins.ui._impl.table import get_default_table_page_size, table
 from marimo._runtime.patches import patch_polars_write_json
 
+_pyspark_connect_DataFrame = None
+
+_pyspark_connect_tried = False
+
+_pyspark_DataFrame = None
+
+_pyspark_tried = False
+
 LOGGER = _loggers.marimo_logger()
 
 
 def include_opinionated() -> bool:
-    from marimo._runtime.context import (
-        get_context,
-        runtime_context_installed,
-    )
-
+    # Only import context if necessary, to avoid repeated import overhead
+    # and only when env var doesn't short-circuit
     if os.getenv("MARIMO_NO_JS", "false").lower() == "true":
         return False
+
+    from marimo._runtime.context import get_context, runtime_context_installed
 
     if runtime_context_installed():
         ctx = get_context()
@@ -166,30 +174,39 @@ class PySparkFormatter(FormatterFactory):
         return "pyspark"
 
     def register(self) -> None:
-        try:
-            from pyspark.sql.connect.dataframe import (  # type: ignore[import-not-found]
-                DataFrame as pyspark_connect_DataFrame,
-            )
-        except (ImportError, ModuleNotFoundError):
-            pyspark_connect_DataFrame = None
+        global _pyspark_connect_tried, _pyspark_connect_DataFrame
+        global _pyspark_tried, _pyspark_DataFrame
 
-        try:
-            from pyspark.sql.dataframe import (  # type: ignore[import-not-found]
-                DataFrame as pyspark_DataFrame,
-            )
-        except (ImportError, ModuleNotFoundError):
-            pyspark_DataFrame = None
+        if not _pyspark_connect_tried:
+            try:
+                from pyspark.sql.connect.dataframe import (
+                    DataFrame as pyspark_connect_DataFrame,  # type: ignore[import-not-found]
+                )
+            except (ImportError, ModuleNotFoundError):
+                _pyspark_connect_DataFrame = None
+            else:
+                _pyspark_connect_DataFrame = pyspark_connect_DataFrame
+            _pyspark_connect_tried = True
 
-        from marimo._output import formatting
+        if not _pyspark_tried:
+            try:
+                from pyspark.sql.dataframe import (
+                    DataFrame as pyspark_DataFrame,  # type: ignore[import-not-found]
+                )
+            except (ImportError, ModuleNotFoundError):
+                _pyspark_DataFrame = None
+            else:
+                _pyspark_DataFrame = pyspark_DataFrame
+            _pyspark_tried = True
 
         if not include_opinionated():
             return
 
-        if pyspark_connect_DataFrame is not None:
+        if _pyspark_connect_DataFrame is not None:
 
-            @formatting.opinionated_formatter(pyspark_connect_DataFrame)
+            @formatting.opinionated_formatter(_pyspark_connect_DataFrame)
             def _show_connect_df(
-                df: pyspark_connect_DataFrame,
+                df: _pyspark_connect_DataFrame,
             ) -> tuple[KnownMimeType, str]:
                 # narwhals (1.37.0) supports pyspark.sql.connect.dataframe.DataFrame
                 if hasattr(nw.dependencies, "is_pyspark_connect_dataframe"):
@@ -205,10 +222,10 @@ class PySparkFormatter(FormatterFactory):
                     _internal_preload=True,
                 )._mime_()
 
-        if pyspark_DataFrame is not None:
+        if _pyspark_DataFrame is not None:
 
-            @formatting.opinionated_formatter(pyspark_DataFrame)
-            def _show_df(df: pyspark_DataFrame) -> tuple[KnownMimeType, str]:
+            @formatting.opinionated_formatter(_pyspark_DataFrame)
+            def _show_df(df: _pyspark_DataFrame) -> tuple[KnownMimeType, str]:
                 return table.lazy(df)._mime_()
 
 
