@@ -49,9 +49,13 @@ class DateSeriesInfo:
 
 
 def _get_name(series: nw.Series) -> str:
-    if series.name is None:
+    # Fast-path: avoid str() call if already a string
+    name = series.name
+    if name is None:
         return ""
-    return str(series.name)
+    if isinstance(name, str):
+        return name
+    return str(name)
 
 
 @nw.narwhalify(eager_only=True, series_only=True)
