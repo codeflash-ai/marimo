@@ -228,9 +228,11 @@ def _get_tools(mode: CopilotMode) -> list[ToolDefinition]:
 
 
 def _get_ai_config(config: AiConfig, key: str) -> dict[str, Any]:
-    if key not in config:
+    v = config.get(key)
+    # Avoid repeated get and cast; catch None directly
+    if v is None:
         return {}
-    return cast(dict[str, Any], config.get(key, {}))
+    return cast(dict[str, Any], v)
 
 
 def get_chat_model(config: AiConfig) -> str:
@@ -287,22 +289,25 @@ def _get_key(
     config = cast(dict[str, Any], config)
 
     if name == "Bedrock":
-        if "profile_name" in config:
-            profile_name = config.get("profile_name", "")
-            return f"profile:{profile_name}"
-        elif (
-            "aws_access_key_id" in config and "aws_secret_access_key" in config
-        ):
-            return f"{config['aws_access_key_id']}:{config['aws_secret_access_key']}"
-        else:
-            return ""
+        # Prefer get once
+        prof = config.get("profile_name")
+        if prof is not None:
+            return f"profile:{prof}"
+        access = config.get("aws_access_key_id")
+        secret = config.get("aws_secret_access_key")
+        if access is not None and secret is not None:
+            return f"{access}:{secret}"
+        return ""
 
-    if "api_key" in config:
-        key = config["api_key"]
-        if key:
-            return cast(str, key)
+    key = config.get("api_key")
+    if key:
+        return cast(str, key)
 
-    if "http://127.0.0.1:11434/" in config.get("base_url", ""):
+    base_url = config.get("base_url", "")
+    # test direct match
+    if isinstance(base_url, str) and "http://127.0.0.1:11434/" in base_url:
+        # Ollama can be configured and in that case the api key is not needed.
+        # We send a placeholder value to prevent the user from being confused.
         # Ollama can be configured and in that case the api key is not needed.
         # We send a placeholder value to prevent the user from being confused.
         return "ollama-placeholder"
@@ -334,10 +339,7 @@ def _get_base_url(config: Any, name: str = "") -> Optional[str]:
             )
 
     if name == "Bedrock":
-        if "region_name" in config:
-            return cast(str, config["region_name"])
-        else:
-            return None
-    elif "base_url" in config:
-        return cast(str, config["base_url"])
-    return None
+        region = config.get("region_name")
+        return cast(str, region) if region is not None else None
+    base_url = config.get("base_url")
+    return cast(str, base_url) if base_url is not None else None
