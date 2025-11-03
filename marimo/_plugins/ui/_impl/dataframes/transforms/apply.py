@@ -23,39 +23,46 @@ T = TypeVar("T")
 
 
 def _handle(df: T, handler: TransformHandler[T], transform: Transform) -> T:
-    if transform.type is TransformType.COLUMN_CONVERSION:
+    # Optimization: Use a local variable for TransformType to speed up attribute lookup
+    TT = TransformType
+    ttype = transform.type
+    if ttype is TT.COLUMN_CONVERSION:
         return handler.handle_column_conversion(df, transform)
-    if transform.type is TransformType.RENAME_COLUMN:
+    elif ttype is TT.RENAME_COLUMN:
         return handler.handle_rename_column(df, transform)
-    if transform.type is TransformType.SORT_COLUMN:
+    elif ttype is TT.SORT_COLUMN:
         return handler.handle_sort_column(df, transform)
-    if transform.type is TransformType.FILTER_ROWS:
+    elif ttype is TT.FILTER_ROWS:
         return handler.handle_filter_rows(df, transform)
-    if transform.type is TransformType.GROUP_BY:
+    elif ttype is TT.GROUP_BY:
         return handler.handle_group_by(df, transform)
-    if transform.type is TransformType.AGGREGATE:
+    elif ttype is TT.AGGREGATE:
         return handler.handle_aggregate(df, transform)
-    if transform.type is TransformType.SELECT_COLUMNS:
+    elif ttype is TT.SELECT_COLUMNS:
         return handler.handle_select_columns(df, transform)
-    if transform.type is TransformType.SHUFFLE_ROWS:
+    elif ttype is TT.SHUFFLE_ROWS:
         return handler.handle_shuffle_rows(df, transform)
-    if transform.type is TransformType.SAMPLE_ROWS:
+    elif ttype is TT.SAMPLE_ROWS:
         return handler.handle_sample_rows(df, transform)
-    if transform.type is TransformType.EXPLODE_COLUMNS:
+    elif ttype is TT.EXPLODE_COLUMNS:
         return handler.handle_explode_columns(df, transform)
-    if transform.type is TransformType.EXPAND_DICT:
+    elif ttype is TT.EXPAND_DICT:
         return handler.handle_expand_dict(df, transform)
-    if transform.type is TransformType.UNIQUE:
+    elif ttype is TT.UNIQUE:
         return handler.handle_unique(df, transform)
-    assert_never(transform.type)
+    else:
+        assert_never(ttype)
 
 
 def _apply_transforms(
     df: T, handler: TransformHandler[T], transforms: Transformations
 ) -> T:
-    if not transforms.transforms:
+    # Optimization: Local variable for transforms list
+    transforms_list = transforms.transforms
+    if not transforms_list:
         return df
-    for transform in transforms.transforms:
+    # Optimization: Use for loop over list without repeated attribute lookups
+    for transform in transforms_list:
         df = _handle(df, handler, transform)
     return df
 
