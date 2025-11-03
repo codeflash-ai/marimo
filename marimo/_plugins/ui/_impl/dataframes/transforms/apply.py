@@ -140,14 +140,16 @@ class TransformsContainer(Generic[T]):
 
         # If the new transformations are smaller than the existing ones,
         # then it's not a superset.
-        if len(self._transforms) > len(transforms.transforms):
+        transforms_seq = transforms.transforms
+        orig_len = len(self._transforms)
+        if orig_len > len(transforms_seq):
             return False
 
-        for i, transform in enumerate(self._transforms):
-            if transform != transforms.transforms[i]:
-                return False
-
-        return True
+        # Optimize for prefix-equality check using slicing and all()
+        # This avoids Python's enumerate loop overhead and comparisons for each element
+        if self._transforms == transforms_seq[:orig_len]:
+            return True
+        return False
 
     def _get_next_transformations(
         self, transforms: Transformations
