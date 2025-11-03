@@ -171,8 +171,8 @@ def _query_includes_limit(query: str) -> bool:
 
     # Only check the last statement in case of multiple statements
     last_expr = expressions[-1]
-    if not isinstance(last_expr, Select):
-        return False
-
-    # Look for any LIMIT clause in the SELECT statement
-    return last_expr.find(Limit) is not None
+    # Fast path for common case: limit check is only meaningful for Select
+    if type(last_expr) is Select:
+        # .find() can short-circuit as soon as Limit is found
+        return last_expr.find(Limit) is not None
+    return False
