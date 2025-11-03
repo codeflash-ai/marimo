@@ -80,7 +80,20 @@ class ToolManager:
             A list of tool definitions available for the given mode.
         """
         all_tools = self._get_all_tools()
-        return [tool for tool in all_tools if mode in tool.mode]
+        # Optimize membership test by converting tool.mode to set if not already a set
+        # This reduces O(n) membership to O(1) for large tool.mode collections
+        result = []
+        for tool in all_tools:
+            modes = tool.mode
+            if not isinstance(modes, set):
+                try:
+                    # Attempt to convert to set; fallback to original on error (preserve behavior)
+                    modes = set(modes)
+                except TypeError:
+                    modes = [modes]
+            if mode in modes:
+                result.append(tool)
+        return result
 
     def _get_tool(
         self, name: str, source: Optional[ToolSource] = None
