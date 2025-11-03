@@ -31,7 +31,8 @@ def validate_between_range(
     if value is None:
         return
 
-    validate_number(value)
+    if not isinstance(value, (int, float)):
+        raise TypeError("Value must be a number")
     if min_value is not None and value < min_value:
         raise ValueError(f"Value must be greater than or equal to {min_value}")
     if max_value is not None and value > max_value:
