@@ -119,13 +119,13 @@ class AnyProviderConfig:
         fallback_base_url: Optional[str] = None,
         require_key: bool = False,
     ) -> AnyProviderConfig:
-        ai_config: dict[str, Any] = _get_ai_config(config, key)
+        ai_config: dict[str, Any] = config[key] if key in config else {}
         key = _get_key(
             ai_config, name, fallback_key=fallback_key, require_key=require_key
         )
 
         kwargs: dict[str, Any] = {
-            "base_url": _get_base_url(ai_config) or fallback_base_url,
+            "base_url": ai_config.get("base_url") or fallback_base_url,
             "api_key": key,
             "ssl_verify": ai_config.get("ssl_verify", True),
             "ca_bundle_path": ai_config.get("ca_bundle_path", None),
