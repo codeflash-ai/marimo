@@ -459,10 +459,10 @@ class CellManager:
         Returns:
             Optional[CellData]: The cell's data, or None if the cell doesn't exist
         """
-        if cell_id not in self._cell_data:
+        cell = self._cell_data.get(cell_id)
+        if cell is None:
             LOGGER.debug(f"Cell with ID '{cell_id}' not found in cell manager")
-            return None
-        return self._cell_data[cell_id]
+        return cell
 
     def get_cell_data_by_name(self, name: str) -> Optional[CellData]:
         """Find a cell ID by its name.
