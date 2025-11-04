@@ -59,7 +59,7 @@ class NarwhalsTableManager(
     def from_dataframe(
         data: Union[IntoDataFrameT, IntoLazyFrameT],
     ) -> NarwhalsTableManager[IntoDataFrameT, IntoLazyFrameT]:
-        return NarwhalsTableManager(nw.from_native(data, pass_through=False))
+        return NarwhalsTableManager(nw.from_native(data, False))
 
     def as_frame(self) -> nw.DataFrame[Any]:
         if is_narwhals_lazyframe(self.data):
