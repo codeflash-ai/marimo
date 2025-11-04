@@ -45,6 +45,16 @@ from marimo._schemas.serialization import (
     NotebookSerializationV1,
 )
 
+_python_pattern = re.compile(r"\{.*python.*\}")
+
+_sql_pattern = re.compile(r"\{.*sql.*\}")
+
+_marimo_pattern = re.compile(r".*\{.*marimo.*\}")
+
+_has_new_superfences = DependencyManager.new_superfences.has_required_version(
+    quiet=True
+)
+
 LOGGER = _loggers.marimo_logger()
 
 MARIMO_MD = "marimo-md"
@@ -77,10 +87,10 @@ def extract_attribs(
 
 def _is_code_tag(text: str) -> bool:
     head = text.split("\n")[0].strip()
-    legacy_format = bool(re.search(r"\{.*python.*\}", head))
-    legacy_format |= bool(re.search(r"\{.*sql.*\}", head))
-    if DependencyManager.new_superfences.has_required_version(quiet=True):
-        supported_format = bool(re.search(r".*\{.*marimo.*\}", head))
+    legacy_format = bool(_python_pattern.search(head))
+    legacy_format |= bool(_sql_pattern.search(head))
+    if _has_new_superfences:
+        supported_format = bool(_marimo_pattern.search(head))
         return legacy_format or supported_format
     return legacy_format
 
