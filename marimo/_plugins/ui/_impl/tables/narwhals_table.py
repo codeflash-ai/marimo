@@ -8,6 +8,8 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 
 import msgspec
+import narwhals as nw_main
+import narwhals.stable.v1 as nw1
 import narwhals.stable.v2 as nw
 from narwhals.typing import IntoDataFrameT, IntoLazyFrameT
 
@@ -44,6 +46,8 @@ from marimo._utils.narwhals_utils import (
 if TYPE_CHECKING:
     from marimo._plugins.ui._impl.table import SortArgs
 
+_LAZYFRAME_TYPES = (nw.LazyFrame, nw_main.LazyFrame, nw1.LazyFrame)
+
 LOGGER = _loggers.marimo_logger()
 UNSTABLE_API_WARNING = "`Series.hist` is being called from the stable API although considered an unstable feature."
 
@@ -74,7 +78,8 @@ class NarwhalsTableManager(
     def with_new_data(
         self, data: nw.DataFrame[Any] | nw.LazyFrame[Any]
     ) -> TableManager[Any]:
-        if type(self) is NarwhalsTableManager:
+        # Prefer direct construction when class is not a subclass
+        if self.__class__ is NarwhalsTableManager:
             return NarwhalsTableManager(data)
         # If this call comes from a subclass, we need to call the constructor
         # of the subclass with the native data.
@@ -265,16 +270,19 @@ class NarwhalsTableManager(
         if offset < 0:
             raise ValueError("Offset must be a non-negative integer")
 
+        # Fast-path slicing and LazyFrame check
+        data = self.data
         if offset == 0:
-            return self.with_new_data(self.data.head(count))
+            return self.with_new_data(data.head(count))
         else:
-            if is_narwhals_lazyframe(self.data):
+            is_lazy = isinstance(data, _LAZYFRAME_TYPES)
+            if is_lazy:
                 # Lazyframes do not support slicing, https://github.com/narwhals-dev/narwhals/issues/2389
                 # So we collect the first n rows
-                data = self.data.head(offset + count).collect()
-                return self.with_new_data(data[offset : offset + count])
+                collected = data.head(offset + count).collect()
+                return self.with_new_data(collected[offset : offset + count])
             else:
-                return self.with_new_data(self.data[offset : offset + count])
+                return self.with_new_data(data[offset : offset + count])
 
     def search(self, query: str) -> TableManager[Any]:
         query = query.lower()
