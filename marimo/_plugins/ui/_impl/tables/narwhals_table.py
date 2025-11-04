@@ -30,6 +30,7 @@ from marimo._plugins.ui._impl.tables.table_manager import (
     TableManager,
 )
 from marimo._utils.narwhals_utils import (
+    LAZYFRAME_TYPES,
     can_narwhalify,
     dataframe_to_csv,
     downgrade_narwhals_df_to_v1,
@@ -62,7 +63,7 @@ class NarwhalsTableManager(
         return NarwhalsTableManager(nw.from_native(data, pass_through=False))
 
     def as_frame(self) -> nw.DataFrame[Any]:
-        if is_narwhals_lazyframe(self.data):
+        if isinstance(self.data, LAZYFRAME_TYPES):
             return self.data.collect()
         return self.data
 
@@ -611,7 +612,7 @@ class NarwhalsTableManager(
             return self.as_frame().shape[0]
 
         # When lazy, we don't know the number of rows
-        if is_narwhals_lazyframe(self.data):
+        if isinstance(self.data, LAZYFRAME_TYPES):
             return None
 
         # Otherwise, we can get the number of rows from the shape

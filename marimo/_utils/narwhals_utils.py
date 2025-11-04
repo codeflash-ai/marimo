@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, Union, overload
+from typing import TYPE_CHECKING, Any, TypeGuard, Union, overload
 
 import narwhals as nw_main
 import narwhals.dtypes as nw_dtypes
@@ -21,6 +21,8 @@ else:
 if TYPE_CHECKING:
     from narwhals.typing import IntoDataFrame, IntoFrame, IntoLazyFrame
     from typing_extensions import TypeIs
+
+LAZYFRAME_TYPES = (nw.LazyFrame, nw_main.LazyFrame, nw1.LazyFrame)
 
 
 @overload
