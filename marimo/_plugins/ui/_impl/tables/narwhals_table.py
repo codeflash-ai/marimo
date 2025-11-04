@@ -90,8 +90,10 @@ class NarwhalsTableManager(
     def to_json_str(
         self, format_mapping: Optional[FormatMapping] = None
     ) -> str:
-        frame = self.apply_formatting(format_mapping).as_frame()
-        return sanitize_json_bigint(frame.rows(named=True))
+        # Chain as_frame and rows directly to avoid extra frame variable
+        return sanitize_json_bigint(
+            self.apply_formatting(format_mapping).as_frame().rows(named=True)
+        )
 
     def to_parquet(self) -> bytes:
         stream = io.BytesIO()
@@ -106,11 +108,12 @@ class NarwhalsTableManager(
 
         frame = self.as_frame()
         _data = frame.to_dict(as_series=False).copy()
+        fv = format_value  # Local for faster access in loop
         for col in _data.keys():
             if col in format_mapping:
-                _data[col] = [
-                    format_value(col, x, format_mapping) for x in _data[col]
-                ]
+                fmt = format_mapping[col]
+                # Use local values in list comprehension for faster lookup
+                _data[col] = [fv(col, x, format_mapping) for x in _data[col]]
         return NarwhalsTableManager(
             nw.from_dict(_data, backend=nw.get_native_namespace(frame))
         )

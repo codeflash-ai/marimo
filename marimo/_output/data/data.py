@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+from json import dumps, loads
 from typing import Any, Union
 
 from marimo._plugins.core.media import is_data_empty
@@ -11,6 +12,10 @@ from marimo._runtime.virtual_file import (
     VirtualFile,
     VirtualFileLifecycleItem,
 )
+
+MAX_SAFE_INTEGER = 9007199254740991
+
+MIN_SAFE_INTEGER = -9007199254740991
 
 
 def pdf(data: bytes) -> VirtualFile:
@@ -193,23 +198,18 @@ def sanitize_json_bigint(
     This is necessary because the frontend will round ints larger than
     Number.MAX_SAFE_INTEGER to Number.MAX_SAFE_INTEGER.
     """
-    from json import dumps, loads
-
-    # JavaScript's safe integer limits
-    MAX_SAFE_INTEGER = 9007199254740991
-    MIN_SAFE_INTEGER = -9007199254740991
-
-    def convert_key(key: Any) -> Any:
-        # Keys must be str, int, float, bool, or None
-        if key is None:
-            return key
-        if isinstance(key, (str, int, float, bool)):
-            return key
-        return str(key)
 
     def convert_bigint(obj: Any) -> Any:
         if isinstance(obj, dict):
-            return {convert_key(k): convert_bigint(v) for k, v in obj.items()}  # type: ignore
+            # Inline key conversion for in-place performance
+            return {
+                (
+                    k
+                    if k is None or isinstance(k, (str, int, float, bool))
+                    else str(k)
+                ): convert_bigint(v)
+                for k, v in obj.items()
+            }  # type: ignore
         elif isinstance(obj, list):
             return [convert_bigint(item) for item in obj]  # type: ignore
         elif isinstance(obj, int) and (
