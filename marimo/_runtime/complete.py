@@ -393,7 +393,8 @@ def _key_options_via_keys_method(obj: HasKeysMethod) -> list[str]:
 
 # TODO refactor to customize the `CompletionOption.info` with `"columns"`
 def _key_options_via_columns_method(obj: HasColumnsProperty) -> list[str]:
-    return [str(col) for col in obj.columns]
+    columns = obj.columns
+    return list(map(str, columns))
 
 
 def _key_options_dispatcher(obj: Any) -> list[str]:
