@@ -86,10 +86,13 @@ def _is_code_tag(text: str) -> bool:
 
 
 def _get_language(text: str) -> str:
-    header = text.split("\n").pop(0)
+    # Use partition to efficiently get the first line.
+    header = text.partition("\n")[0]
     match = RE_NESTED_FENCE_START.match(header)
-    if match and match.group("lang"):
-        return str(match.group("lang"))
+    if match:
+        lang = match.group("lang")
+        if lang:
+            return str(lang)
     return "python"
 
 
