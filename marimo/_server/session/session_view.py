@@ -401,7 +401,8 @@ def merge_cell_operation(
     if next_.status == "running" and previous.status == "queued":
         next_.console = []
     else:
-        combined_console: list[CellOutput] = as_list(previous.console)
+        # Only call as_list when needed, fewer allocations and more direct mutation
+        combined_console = as_list(previous.console)
         combined_console.extend(as_list(next_.console))
         next_.console = combined_console
 

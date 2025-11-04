@@ -15,6 +15,9 @@ def first(iterable: Union[Iterable[T], T]) -> T:
 
 
 def as_list(value: Union[T, Optional[T], list[T]]) -> list[T]:
+    # Direct identity/None check first, only list conversion on demand
+    if isinstance(value, list):
+        return value
     if value is None:
         return []
-    return value if isinstance(value, list) else [value]  # type: ignore[no-any-return]
+    return [value]  # type: ignore[no-any-return]
