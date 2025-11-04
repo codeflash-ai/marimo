@@ -51,7 +51,7 @@ def extract_order(
     order: list[list[int]] = [[]] * len(codes)
     for i, code in enumerate(codes):
         dupes = len(lookup[code])
-        order[i] = [offset + j for j in range(dupes)]
+        order[i] = list(range(offset, offset + dupes))
         offset += dupes
     return order
 
