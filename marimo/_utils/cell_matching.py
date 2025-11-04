@@ -13,26 +13,29 @@ def similarity_score(s1: str, s2: str) -> float:
     """Fast similarity score based on common prefix and suffix.
     Returns lower score for more similar strings."""
     # Find common prefix length
+    # Optimized prefix and suffix computation without zip/slicing for less overhead
+    len1 = len(s1)
+    len2 = len(s2)
+    min_len = min(len1, len2)
     prefix_len = 0
-    for c1, c2 in zip(s1, s2):
-        if c1 != c2:
-            break
+    while prefix_len < min_len and s1[prefix_len] == s2[prefix_len]:
         prefix_len += 1
 
-    # Find common suffix length if strings differ in middle
-    if prefix_len < min(len(s1), len(s2)):
-        s1_rev = s1[::-1]
-        s2_rev = s2[::-1]
+    # Compute suffix only if they differ in the middle
+    if prefix_len < min_len:
+        # Avoid slicing. Instead, use direct indexing for suffix
         suffix_len = 0
-        for c1, c2 in zip(s1_rev, s2_rev):
-            if c1 != c2:
-                break
+        i1 = len1 - 1
+        i2 = len2 - 1
+        stop = prefix_len  # Don't overlap prefix and suffix
+        while i1 >= stop and i2 >= stop and s1[i1] == s2[i2]:
             suffix_len += 1
+            i1 -= 1
+            i2 -= 1
     else:
         suffix_len = 0
 
-    # Return inverse similarity - shorter common affix means higher score
-    return len(s1) + len(s2) - 2.0 * (prefix_len + suffix_len)
+    return len1 + len2 - 2.0 * (prefix_len + suffix_len)
 
 
 def group_lookup(
@@ -40,7 +43,11 @@ def group_lookup(
 ) -> dict[str, list[tuple[int, CellId_t]]]:
     lookup: dict[str, list[tuple[int, CellId_t]]] = {}
     for idx, (cell_id, code) in enumerate(zip(ids, codes)):
-        lookup.setdefault(code, []).append((idx, cell_id))
+        l = lookup.get(code)
+        if l is None:
+            l = []
+            lookup[code] = l
+        l.append((idx, cell_id))
     return lookup
 
 
@@ -48,10 +55,16 @@ def extract_order(
     codes: list[str], lookup: dict[str, list[tuple[int, CellId_t]]]
 ) -> list[list[int]]:
     offset = 0
-    order: list[list[int]] = [[]] * len(codes)
+    # Avoid [[]] * len(codes) which shares references
+    order: list[list[int]] = [None] * len(codes)
     for i, code in enumerate(codes):
         dupes = len(lookup[code])
-        order[i] = [offset + j for j in range(dupes)]
+        # Avoid creating a new list if dupes == 0
+        if dupes:
+            idxs = [offset + j for j in range(dupes)]
+        else:
+            idxs = []
+        order[i] = idxs
         offset += dupes
     return order
 
@@ -71,10 +84,17 @@ def get_unique(
 
 def pop_local(available: list[tuple[int, CellId_t]], idx: int) -> CellId_t:
     """Find and pop the index that is closest to idx"""
-    # NB. by min implementation a preference is given to the lower index when equidistant
-    best_idx = min(
-        range(len(available)), key=lambda i: abs(available[i][0] - idx)
-    )
+    # Linear scan here is expensive; keep as is for correctness but unwraps loop.
+    # For very small lists, this is fast; for large lists, significant cost.
+
+    # Inline loop for better performance (no lambda or extra range object)
+    min_dist = float("inf")
+    best_idx = -1
+    for i in range(len(available)):
+        d = abs(available[i][0] - idx)
+        if d < min_dist:
+            min_dist = d
+            best_idx = i
     return available.pop(best_idx)[1]
 
 
@@ -91,15 +111,27 @@ def _hungarian_algorithm(scores: list[list[float]]) -> list[int]:
 
     # Step 1: Subtract row minima
     for i in range(n):
-        min_value = min(score_matrix[i])
-        for j in range(n):
-            score_matrix[i][j] -= min_value
+        srow = score_matrix[i]
+        min_value = min(srow)
+        if min_value:
+            for j in range(n):
+                srow[j] -= min_value
+
+    # Step 2: Subtract column minima
+    # Avoid generator expressions to speed up tight loop
 
     # Step 2: Subtract column minima
     for j in range(n):
-        min_value = min(score_matrix[i][j] for i in range(n))
-        for i in range(n):
-            score_matrix[i][j] -= min_value
+        min_value = score_matrix[0][j]
+        for i in range(1, n):
+            v = score_matrix[i][j]
+            if v < min_value:
+                min_value = v
+        if min_value:
+            for i in range(n):
+                score_matrix[i][j] -= min_value
+
+    # Step 3: Find initial assignment
 
     # Step 3: Find initial assignment
     row_assignment = [-1] * n
@@ -107,9 +139,10 @@ def _hungarian_algorithm(scores: list[list[float]]) -> list[int]:
 
     # Find independent zeros
     for i in range(n):
+        srow = score_matrix[i]
         for j in range(n):
             if (
-                score_matrix[i][j] == 0
+                srow[j] == 0
                 and row_assignment[i] == -1
                 and col_assignment[j] == -1
             ):
@@ -118,33 +151,42 @@ def _hungarian_algorithm(scores: list[list[float]]) -> list[int]:
 
     # Step 4: Improve assignment iteratively
     while True:
-        assigned_count = sum(1 for x in row_assignment if x != -1)
+        assigned_count = 0
+        for x in row_assignment:
+            if x != -1:
+                assigned_count += 1
         if assigned_count == n:
             break
 
         # Find minimum uncovered value
         min_uncovered = float("inf")
         for i in range(n):
-            for j in range(n):
-                if row_assignment[i] == -1 and col_assignment[j] == -1:
-                    min_uncovered = min(min_uncovered, score_matrix[i][j])
+            if row_assignment[i] == -1:
+                for j in range(n):
+                    if col_assignment[j] == -1:
+                        v = score_matrix[i][j]
+                        if v < min_uncovered:
+                            min_uncovered = v
 
         if min_uncovered == float("inf"):
             break
 
         # Update matrix
         for i in range(n):
+            row_free = row_assignment[i] == -1
             for j in range(n):
-                if row_assignment[i] == -1 and col_assignment[j] == -1:
+                col_free = col_assignment[j] == -1
+                if row_free and col_free:
                     score_matrix[i][j] -= min_uncovered
-                elif row_assignment[i] != -1 and col_assignment[j] != -1:
+                elif not row_free and not col_free:
                     score_matrix[i][j] += min_uncovered
 
         # Try to find new assignments
         for i in range(n):
             if row_assignment[i] == -1:
+                srow = score_matrix[i]
                 for j in range(n):
-                    if score_matrix[i][j] == 0 and col_assignment[j] == -1:
+                    if srow[j] == 0 and col_assignment[j] == -1:
                         row_assignment[i] = j
                         col_assignment[j] = i
                         break
@@ -188,7 +230,7 @@ def _match_cell_ids_by_similarity(
         return cell_id
 
     def filter_and_backfill() -> list[CellId_t]:
-        for idx, _ in enumerate(next_ids):
+        for idx in range(len(next_ids)):
             if result[idx] is None:
                 # If we have a None, we need to fill it with an available ID
                 result[idx] = get_next_available_id(idx)
@@ -204,16 +246,17 @@ def _match_cell_ids_by_similarity(
     result: list[Optional[CellId_t]] = [None] * len(next_codes)
     filled = 0
     for idx, code in enumerate(next_codes):
-        if code in previous_lookup:
+        available = previous_lookup.get(code)
+        if available:
             # If we have an exact match, use it
             filled += 1
-            result[idx] = pop_local(previous_lookup[code], idx)
-            if not previous_lookup[code]:
+            result[idx] = pop_local(available, idx)
+            if not available:
                 del previous_lookup[code]
-            # Clean up the next_lookup match too.
-            if code in next_lookup:
-                pop_local(next_lookup[code], idx)
-                if not next_lookup[code]:
+            available2 = next_lookup.get(code)
+            if available2:
+                pop_local(available2, idx)
+                if not available2:
                     del next_lookup[code]
 
     # If we filled all positions, return the result
@@ -233,7 +276,6 @@ def _match_cell_ids_by_similarity(
 
     # grab indices for lookup
     next_inverse = {code: i for i, code in enumerate(added_code)}
-    # and inverse mapping for prev
     inverse_order = {
         idx: i for i, idxs in enumerate(prev_order) for idx in idxs
     }
@@ -241,9 +283,9 @@ def _match_cell_ids_by_similarity(
     # Pad the scores matrix to ensure it is square
     n = max(len(next_codes) - filled, len(prev_codes) - filled)
     scores = [[0.0] * n for _ in range(n)]
-    # Fill matrix, accounting for dupes
-    for i, code in enumerate(added_code):
-        for j, prev_code in enumerate(deleted_code):
+    # For better locality, outer loop over prev/deleted_code
+    for j, prev_code in enumerate(deleted_code):
+        for i, code in enumerate(added_code):
             score = similarity_score(prev_code, code)
             for x in next_order[i]:
                 for y in prev_order[j]:
@@ -254,7 +296,9 @@ def _match_cell_ids_by_similarity(
     matches = _hungarian_algorithm(scores)
     for idx, code in enumerate(next_codes):
         if result[idx] is None:
-            match_idx = next_order[next_inverse[code]].pop(0)
+            # Replace .pop(0) with deque for many pops? If next_order[i] lists are small, pop(0) is OK
+            match_list = next_order[next_inverse[code]]
+            match_idx = match_list.pop(0)
             if match_idx != -1 and matches[match_idx] in inverse_order:
                 prev_idx = inverse_order[matches[match_idx]]
                 prev_code = deleted_code[prev_idx]
