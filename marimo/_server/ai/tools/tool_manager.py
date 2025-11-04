@@ -1,6 +1,8 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
+import asyncio
+import inspect
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from starlette.applications import (
@@ -297,14 +299,19 @@ class ToolManager:
         arguments: FunctionArgs,
     ) -> Any:
         """Call a tool handler, handling both sync and async functions."""
-        import asyncio
-        import inspect
+        if not hasattr(self, "_coroutine_cache"):
+            self._coroutine_cache: dict[Callable, bool] = {}
 
-        if inspect.iscoroutinefunction(handler):
+        if handler not in self._coroutine_cache:
+            self._coroutine_cache[handler] = inspect.iscoroutinefunction(
+                handler
+            )
+
+        if self._coroutine_cache[handler]:
             return await handler(arguments)
         else:
             # Run sync function in thread pool to avoid blocking
-            return await asyncio.get_event_loop().run_in_executor(
+            return await asyncio.get_running_loop().run_in_executor(
                 None, handler, arguments
             )
 
