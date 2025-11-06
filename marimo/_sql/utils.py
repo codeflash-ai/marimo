@@ -102,8 +102,19 @@ def convert_to_output(
             raise ValueError("to_native is required for native output format")
         return to_native()
 
+    polars_has = (
+        DependencyManager.polars.has()
+        if sql_output_format in ("polars", "lazy-polars", "auto")
+        else None
+    )
+    pandas_has = (
+        DependencyManager.pandas.has()
+        if sql_output_format in ("pandas", "auto")
+        else None
+    )
+
     if sql_output_format in ("polars", "lazy-polars"):
-        if not DependencyManager.polars.has():
+        if not polars_has:
             raise_df_import_error("polars[pyarrow]")
 
     if sql_output_format == "polars":
@@ -122,12 +133,12 @@ def convert_to_output(
         return result.lazy()
 
     if sql_output_format == "pandas":
-        if not DependencyManager.pandas.has():
+        if not pandas_has:
             raise_df_import_error("pandas")
         return to_pandas()
 
     # Auto
-    if DependencyManager.polars.has():
+    if polars_has:
         import polars as pl
 
         try:
@@ -139,7 +150,7 @@ def convert_to_output(
             LOGGER.info("Failed to convert to polars, falling back to pandas")
             DependencyManager.pandas.require("to convert this data")
 
-    if DependencyManager.pandas.has():
+    if pandas_has:
         try:
             return to_pandas()
         except Exception as e:
