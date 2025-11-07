@@ -34,7 +34,7 @@ def is_submodule(src_name: str, target_name: str) -> bool:
     target_parts = target_name.split(".")
     if len(src_parts) > len(target_parts):
         return False
-    return all(src_parts[i] == target_parts[i] for i in range(len(src_parts)))
+    return src_parts == target_parts[: len(src_parts)]
 
 
 def _depends_on(
@@ -57,7 +57,8 @@ def _depends_on(
     for found_module in itertools.chain(
         [src_module], module_dependencies.values()
     ):
-        file = safe_getattr(found_module, "__file__", None)
+        # Optimized: use direct getattr (never raises ModuleNotFoundError for __file__ on modules)
+        file = getattr(found_module, "__file__", None)
         if file is None:
             continue
 
