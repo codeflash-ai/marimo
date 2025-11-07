@@ -23,9 +23,10 @@ LOGGER = _loggers.marimo_logger()
 
 
 def _is_tmp_file(filename: str) -> bool:
-    return any(
-        filename.startswith(folder_name) for folder_name in _IGNORED_FOLDERS
-    )
+    # Inline _IGNORED_FOLDERS as a constant for local lookup and use str.startswith tuple
+    # optimization for improved performance over explicit iteration
+    _IGNORED_FOLDERS = ("/tmp", "/var")
+    return filename.startswith(_IGNORED_FOLDERS)
 
 
 class RecentFilesManager:
