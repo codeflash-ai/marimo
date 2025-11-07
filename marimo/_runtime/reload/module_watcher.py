@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import itertools
-import pathlib
 import sys
 import threading
 import time
@@ -80,15 +79,14 @@ def _is_third_party_module(module: types.ModuleType) -> bool:
     filepath = safe_getattr(module, "__file__", None)
     if filepath is None:
         return False
-    return "site-packages" in pathlib.Path(filepath).parts
+    return "site-packages" in filepath
 
 
 def _get_excluded_modules(modules: dict[str, types.ModuleType]) -> list[str]:
     return [
         modname
-        for modname in modules
-        if (m := modules.get(modname)) is not None
-        and _is_third_party_module(m)
+        for modname, module in modules.items()
+        if module is not None and _is_third_party_module(module)
     ]
 
 
