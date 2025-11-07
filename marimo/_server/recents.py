@@ -50,6 +50,10 @@ class RecentFilesManager:
             # of significance is lost
             state = RecentFilesState()
 
+        # Early return if file is already most recent
+        if state.files and state.files[0] == filename:
+            return
+
         if filename in state.files:
             state.files.remove(filename)
         state.files.insert(0, filename)
