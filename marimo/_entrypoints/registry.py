@@ -43,6 +43,13 @@ class EntryPointRegistry(Generic[T]):
 
         # Convert entry point group to env var format (e.g. marimo.cell.executor -> MARIMO_CELL_EXECUTOR)
         self._env_prefix = entry_point_group.replace(".", "_").upper()
+        self._denylist_var = f"{self._env_prefix}_DENYLIST"
+        self._allowlist_var = f"{self._env_prefix}_ALLOWLIST"
+        self._denylist: set[str] | None = None
+        self._allowlist: set[str] | None = None
+
+        self._denylist_loaded: bool = False
+        self._allowlist_loaded: bool = False
 
     def _is_allowed(self, name: str) -> bool:
         """Check if an extension name is allowed based on environment variables.
@@ -54,21 +61,17 @@ class EntryPointRegistry(Generic[T]):
             True if the extension is allowed, False otherwise.
         """
         # Check denylist first
-        denylist_var = f"{self._env_prefix}_DENYLIST"
-        if denylist_var in os.environ:
-            denylist = {
-                n.strip().lower() for n in os.environ[denylist_var].split(",")
-            }
-            if name.lower() in denylist:
-                return False
+        lower_name = name.lower()
+
+        # Check denylist first
+        denylist = self._get_denylist()
+        if denylist and lower_name in denylist:
+            return False
 
         # Then check allowlist
-        allowlist_var = f"{self._env_prefix}_ALLOWLIST"
-        if allowlist_var in os.environ:
-            allowlist = {
-                n.strip().lower() for n in os.environ[allowlist_var].split(",")
-            }
-            return name.lower() in allowlist
+        allowlist = self._get_allowlist()
+        if allowlist:
+            return lower_name in allowlist
 
         return True
 
@@ -148,6 +151,28 @@ class EntryPointRegistry(Generic[T]):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(group={self.entry_point_group!r}, registered={self.names()!r})"
+
+    def _get_denylist(self) -> set[str] | None:
+        # Cache the denylist loading to avoid checking os.environ repeatedly
+        if not self._denylist_loaded:
+            if self._denylist_var in os.environ:
+                self._denylist = {
+                    n.strip().lower()
+                    for n in os.environ[self._denylist_var].split(",")
+                }
+            self._denylist_loaded = True
+        return self._denylist
+
+    def _get_allowlist(self) -> set[str] | None:
+        # Cache the allowlist loading to avoid checking os.environ repeatedly
+        if not self._allowlist_loaded:
+            if self._allowlist_var in os.environ:
+                self._allowlist = {
+                    n.strip().lower()
+                    for n in os.environ[self._allowlist_var].split(",")
+                }
+            self._allowlist_loaded = True
+        return self._allowlist
 
 
 def get_entry_points(group: KnownEntryPoint) -> "EntryPoints":
