@@ -43,6 +43,10 @@ class EntryPointRegistry(Generic[T]):
 
         # Convert entry point group to env var format (e.g. marimo.cell.executor -> MARIMO_CELL_EXECUTOR)
         self._env_prefix = entry_point_group.replace(".", "_").upper()
+        self._denylist_var = f"{self._env_prefix}_DENYLIST"
+        self._allowlist_var = f"{self._env_prefix}_ALLOWLIST"
+        self._denylist: set[str] | None = None
+        self._allowlist: set[str] | None = None
 
     def _is_allowed(self, name: str) -> bool:
         """Check if an extension name is allowed based on environment variables.
@@ -54,21 +58,15 @@ class EntryPointRegistry(Generic[T]):
             True if the extension is allowed, False otherwise.
         """
         # Check denylist first
-        denylist_var = f"{self._env_prefix}_DENYLIST"
-        if denylist_var in os.environ:
-            denylist = {
-                n.strip().lower() for n in os.environ[denylist_var].split(",")
-            }
-            if name.lower() in denylist:
-                return False
+        name_lower = name.lower()
+        denylist = self._get_denylist()
+        if denylist and name_lower in denylist:
+            return False
 
         # Then check allowlist
-        allowlist_var = f"{self._env_prefix}_ALLOWLIST"
-        if allowlist_var in os.environ:
-            allowlist = {
-                n.strip().lower() for n in os.environ[allowlist_var].split(",")
-            }
-            return name.lower() in allowlist
+        allowlist = self._get_allowlist()
+        if allowlist:
+            return name_lower in allowlist
 
         return True
 
@@ -149,10 +147,44 @@ class EntryPointRegistry(Generic[T]):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(group={self.entry_point_group!r}, registered={self.names()!r})"
 
+    def _get_denylist(self) -> set[str] | None:
+        if self._denylist is None and self._denylist_var in os.environ:
+            self._denylist = {
+                n.strip().lower()
+                for n in os.environ[self._denylist_var].split(",")
+            }
+        return self._denylist
+
+    def _get_allowlist(self) -> set[str] | None:
+        if self._allowlist is None and self._allowlist_var in os.environ:
+            self._allowlist = {
+                n.strip().lower()
+                for n in os.environ[self._allowlist_var].split(",")
+            }
+        return self._allowlist
+
 
 def get_entry_points(group: KnownEntryPoint) -> "EntryPoints":
+    # Caching entry_points() across calls to reduce cost in names()
+    # - Let the lru_cache decorate the actual inner logic, so get_entry_points
+    #   can accept non-hashable group types (if any) and remain otherwise unchanged.
+
+    # Use a global per-process cache for entry_points by group, since importlib.metadata.entry_points()
+    # is very expensive.
+    # KnownEntryPoint is hashable and group names are never mutated.
+
+    # This small cache is safe even if group points to a str type.
+    # We avoid functools.lru_cache, as it would change the visible signature.
+    if not hasattr(get_entry_points, "_ep_cache"):
+        get_entry_points._ep_cache = {}
+    _ep_cache = get_entry_points._ep_cache  # type: ignore
+
+    if group in _ep_cache:
+        return _ep_cache[group]
     ep = entry_points()
     if hasattr(ep, "select"):
-        return ep.select(group=group)
+        result = ep.select(group=group)
     else:
-        return ep.get(group, [])  # type: ignore
+        result = ep.get(group, [])  # type: ignore
+    _ep_cache[group] = result
+    return result
