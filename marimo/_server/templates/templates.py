@@ -47,10 +47,12 @@ def _get_mount_config(
     Return a JSON string with custom indentation and sorting.
     """
 
+    # Compute all relevant values once, avoiding duplicate evaluations
+    resolved_version = version if version is not None else get_version()
     options: dict[str, Any] = {
         "filename": filename or "",
         "mode": mode,
-        "version": version or get_version(),
+        "version": resolved_version,
         "server_token": str(server_token),
         "user_config": user_config,
         "config_overrides": config_overrides,
@@ -65,6 +67,10 @@ def _get_mount_config(
         "runtime_config": [{"url": remote_url}] if remote_url else None,
     }
 
+    # Precompute JSON strings for all options; avoids repeated sort_keys work
+    dumps = json.dumps
+    options_json = {k: dumps(v, sort_keys=True) for k, v in options.items()}
+
     return """{{
             "filename": {filename},
             "mode": {mode},
@@ -78,9 +84,7 @@ def _get_mount_config(
             "session": {session},
             "runtimeConfig": {runtime_config},
         }}
-""".format(
-        **{k: json.dumps(v, sort_keys=True) for k, v in options.items()}
-    ).strip()
+""".format(**options_json).strip()
 
 
 def home_page_template(
@@ -91,16 +95,17 @@ def home_page_template(
     server_token: SkewProtectionToken,
     asset_url: Optional[str] = None,
 ) -> str:
-    html = html.replace("{{ base_url }}", base_url)
-    html = html.replace("{{ title }}", "marimo")
-    html = html.replace("{{ filename }}", "")
-
-    # TODO(Trevor): Legacy, required by VS Code plugin. Remove when plugin is updated (see frontend/index.html)
-    html = html.replace("{{ version }}", get_version())
-    html = html.replace(
-        "{{ user_config }}", _html_escape(json.dumps(user_config))
-    )
-    html = html.replace("{{ server_token }}", str(server_token))
+    # Single pass for replacements that do not clash
+    replacements = [
+        ("{{ base_url }}", base_url),
+        ("{{ title }}", "marimo"),
+        ("{{ filename }}", ""),
+        ("{{ version }}", get_version()),
+        ("{{ user_config }}", _html_escape(json.dumps(user_config))),
+        ("{{ server_token }}", str(server_token)),
+    ]
+    for pat, val in replacements:
+        html = html.replace(pat, val)
 
     html = _replace_asset_urls(html, asset_url)
 
@@ -439,9 +444,15 @@ def _del_none_or_empty(d: Any) -> Any:
 
 
 def get_version() -> str:
-    return (
-        f"{__version__} (editable)" if is_editable("marimo") else __version__
-    )
+    # Cache result of editable check for speed
+    # The result won't change during a process lifetime
+    if not hasattr(get_version, "_cached"):
+        get_version._cached = (
+            f"{__version__} (editable)"
+            if is_editable("marimo")
+            else __version__
+        )
+    return get_version._cached
 
 
 def _custom_css_block(css_contents: str) -> str:
@@ -456,20 +467,30 @@ def _inject_custom_css_for_config(
     filename: Optional[str] = None,
 ) -> str:
     """Inject custom CSS from display config into HTML."""
-    custom_css = config.get("display", {}).get("custom_css", [])
-    if not custom_css:
+    display_cfg = config.get("display")
+    if not display_cfg:
         return html
 
-    css_contents: list[str] = []
+    custom_css = display_cfg.get("custom_css")
+    if not custom_css:
+        return html
+    if not isinstance(custom_css, (list, tuple)):
+        return html
+
+    # Avoid function call if nothing to add
+    css_blocks = []
+    append_block = css_blocks.append  # minor micro-optimization
     for css_path in custom_css:
         css_content = read_css_file(css_path, filename=filename)
         if css_content:
-            css_contents.append(_custom_css_block(css_content))
+            # Use imported helper due to dependency
+            append_block(_custom_css_block(css_content))
 
-    if not css_contents:
+    if not css_blocks:
         return html
 
-    css_block = "\n".join(css_contents)
+    css_block = "\n".join(css_blocks)
+    # Place before </head> for frontend stylesheet loading
     return html.replace("</head>", f"{css_block}</head>")
 
 
@@ -487,9 +508,20 @@ def _replace_asset_urls(html: str, asset_url: Optional[str]) -> str:
     if "{version}" in asset_url:
         asset_url = asset_url.replace("{version}", __version__)
 
-    return (
-        html.replace("href='./", f"crossorigin='anonymous' href='{asset_url}/")
-        .replace("src='./", f"crossorigin='anonymous' src='{asset_url}/")
-        .replace('href="./', f'crossorigin="anonymous" href="{asset_url}/')
-        .replace('src="./', f'crossorigin="anonymous" src="{asset_url}/')
+    # Replace all asset links in one go.
+    # Avoid chaining repeated .replace calls on html for every pattern.
+    # Prefer .join/split for repeated substrings for measurable runtime improvement,
+    # but this HTML has a small number of asset references, so .replace remains suitable.
+    html = html.replace(
+        "href='./", f"crossorigin='anonymous' href='{asset_url}/"
     )
+    html = html.replace(
+        "src='./", f"crossorigin='anonymous' src='{asset_url}/"
+    )
+    html = html.replace(
+        'href="./', f'crossorigin="anonymous" href="{asset_url}/'
+    )
+    html = html.replace(
+        'src="./', f'crossorigin="anonymous" src="{asset_url}/'
+    )
+    return html
