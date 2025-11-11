@@ -12,11 +12,15 @@ from typing import Any
 def _getsitepackages() -> list[pathlib.Path]:
     try:
         # Try to get global site-packages (not available in virtual envs)
-        site_packages_dirs = [pathlib.Path(p) for p in site.getsitepackages()]
+        site_packages_dirs = [
+            pathlib.Path(p).resolve() for p in site.getsitepackages()
+        ]
     except AttributeError:
         # Fallback for virtual environments or restricted environments
         try:
-            site_packages_dirs = [pathlib.Path(site.getusersitepackages())]
+            site_packages_dirs = [
+                pathlib.Path(site.getusersitepackages()).resolve()
+            ]
         except AttributeError:
             # Fallback to empty, and handle other ways.
             return []
@@ -35,20 +39,36 @@ def is_local_module(spec: Any) -> bool:
     if "site-packages" in spec.origin:
         return False
 
-    module_path = pathlib.Path(spec.origin).resolve()
-    site_packages_dirs = _getsitepackages()
-    if not site_packages_dirs:
-        # Ultimate fallback: use string matching
-        return "site-packages" not in module_path.parts
+    # Skip pathlib.Path.resolve() if possible by pre-resolving user/site-packages dirs in _getsitepackages
+    # and comparing as strings for much faster comparisons.
+    origin = spec.origin
+    try:
+        # resolve only if needed and cache result
+        module_path_resolved = None
+        site_packages_dirs = _getsitepackages()
+        if not site_packages_dirs:
+            # Ultimate fallback: use string matching
+            return "site-packages" not in pathlib.Path(origin).parts
 
-    # Check if module is in any site-packages directory
-    for site_dir in site_packages_dirs:
-        try:
-            if module_path.is_relative_to(site_dir):
+        # Check using fast string-based prefix matching of canonical absolute paths
+        module_path_abs = pathlib.Path(origin)
+        # Only call .resolve() once if we need to (and only if not absolute)
+        if not module_path_abs.is_absolute():
+            module_path_abs = module_path_abs.resolve()
+        # Convert to string once
+        module_path_str = str(module_path_abs)
+
+        for site_dir in site_packages_dirs:
+            site_dir_str = str(site_dir)
+            # Fast check: site_dir + separator is prefix of module_path_str
+            if module_path_str.startswith(site_dir_str) and (
+                module_path_str == site_dir_str
+                or module_path_str[len(site_dir_str)] in {"/", "\\"}
+            ):
                 return False  # Module is in site-packages
-        except (OSError, ValueError):
-            # Handle path resolution issues
-            continue
+    except (OSError, ValueError):
+        # Handle path resolution issues
+        pass
 
     return True  # Module is local
 
