@@ -578,11 +578,19 @@ class App:
         return get_context().app_kernel_runner_registry.get_runner(self)
 
     def _flatten_outputs(self, outputs: dict[CellId_t, Any]) -> Sequence[Any]:
-        return tuple(
-            outputs[cid]
-            for cid in self._cell_manager.valid_cell_ids()
-            if not self._graph.is_disabled(cid) and cid in outputs
-        )
+        # Efficiently cache needed lookups and perform the checks in a single loop
+        cell_manager = self._cell_manager
+        graph = self._graph
+        outputs_local = outputs
+        valid_cell_ids = cell_manager.valid_cell_ids
+        is_disabled = graph.is_disabled
+
+        # Pre-resolve enabled cell_ids present in outputs (one pass)
+        result = []
+        for cid in valid_cell_ids():
+            if not is_disabled(cid) and cid in outputs_local:
+                result.append(outputs_local[cid])
+        return tuple(result)
 
     def _globals_to_defs(self, glbls: dict[str, Any]) -> _Namespace:
         return _Namespace(
