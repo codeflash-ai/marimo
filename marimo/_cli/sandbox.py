@@ -90,18 +90,25 @@ def _normalize_sandbox_dependencies(
     Add version to the remaining one if not already versioned.
     """
 
-    def include_features(dep: str, features: list[DepFeatures]) -> str:
+    # Single pass: collect both marimo deps and filtered in one traversal
+    marimo_deps = []
+    filtered = []
+    for d in dependencies:
+        if is_marimo_dependency(d):
+            marimo_deps.append(d)
+        else:
+            filtered.append(d)
+
+    def include_features(dep: str, features: list[DepFeatures]) -> str:  # type: ignore
         if not features:
             return dep
 
         # If already bracketed, add the features to the existing bracket
+        features_str = ",".join(features)
         if "[" in dep:
-            return dep.replace("marimo[", f"marimo[{','.join(features)},")
+            return dep.replace("marimo[", f"marimo[{features_str},")
+        return dep.replace("marimo", f"marimo[{features_str}]")
 
-        return dep.replace("marimo", f"marimo[{','.join(features)}]")
-
-    # Find all marimo dependencies
-    marimo_deps = [d for d in dependencies if is_marimo_dependency(d)]
     if not marimo_deps:
         if is_editable("marimo"):
             LOGGER.info("Using editable of marimo for sandbox")
@@ -114,9 +121,6 @@ def _normalize_sandbox_dependencies(
     # Prefer the one with brackets if it exists
     bracketed = next((d for d in marimo_deps if "[" in d), None)
     chosen = bracketed if bracketed else marimo_deps[0]
-
-    # Remove all marimo deps
-    filtered = [d for d in dependencies if not is_marimo_dependency(d)]
 
     if is_editable("marimo"):
         LOGGER.info("Using editable of marimo for sandbox")
