@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 from marimo._loggers import marimo_logger
+from marimo._messaging.ops import SendUIElementMessage
 from marimo._types.ids import WidgetModelId
 
 if TYPE_CHECKING:
@@ -184,25 +185,7 @@ class MarimoComm:
         metadata = {} if metadata is None else metadata
         buffers = [] if buffers is None else buffers
 
-        if msg_type == COMM_OPEN_NAME:
-            self._publish_message_buffer.append(
-                MessageBufferData(
-                    data, metadata, buffers, model_id=self.comm_id
-                )
-            )
-            self.flush()
-            return
-
-        if msg_type == COMM_MESSAGE_NAME:
-            self._publish_message_buffer.append(
-                MessageBufferData(
-                    data, metadata, buffers, model_id=self.comm_id
-                )
-            )
-            self.flush()
-            return
-
-        if msg_type == COMM_CLOSE_NAME:
+        if msg_type in {COMM_OPEN_NAME, COMM_MESSAGE_NAME, COMM_CLOSE_NAME}:
             self._publish_message_buffer.append(
                 MessageBufferData(
                     data, metadata, buffers, model_id=self.comm_id
@@ -218,8 +201,6 @@ class MarimoComm:
         )
 
     def flush(self) -> None:
-        from marimo._messaging.ops import SendUIElementMessage
-
         while self._publish_message_buffer:
             item = self._publish_message_buffer.pop(0)
             SendUIElementMessage(
