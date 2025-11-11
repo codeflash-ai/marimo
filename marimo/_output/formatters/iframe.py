@@ -1,7 +1,14 @@
 # Copyright 2025 Marimo. All rights reserved.
 from __future__ import annotations
 
+import re
 from html.parser import HTMLParser
+
+_SCRIPT_INLINE_RE = re.compile(
+    # matches <script ...> that does NOT have 'src=' before the close '>'
+    r"<script\b(?![^>]*\bsrc\s*=)",
+    re.IGNORECASE,
+)
 
 
 def maybe_wrap_in_iframe(html_content: str) -> str:
@@ -15,6 +22,10 @@ def maybe_wrap_in_iframe(html_content: str) -> str:
 def _has_script_tag_without_src(html_content: str) -> bool:
     # Cheap check
     if "<script" not in html_content:
+        return False
+
+    # Fast regex check for <script ...> without src
+    if not _SCRIPT_INLINE_RE.search(html_content):
         return False
 
     parser = ScriptTagParser()
