@@ -354,10 +354,11 @@ class DateChartBuilder(ChartBuilder):
         df: nw.DataFrame[Any] = nw.from_native(
             data, pass_through=True, eager_only=True
         )
+        col = df[column]
+        min_date = col.min()
+        max_date = col.max()
 
-        # Get min and max dates using narwhals
-        min_date = df[column].min()
-        max_date = df[column].max()
+        # Handle time-only data
 
         # Handle time-only data
         if isinstance(min_date, time) and isinstance(max_date, time):
@@ -365,10 +366,9 @@ class DateChartBuilder(ChartBuilder):
 
         # Calculate the difference in days
         time_diff = max_date - min_date
-        if not hasattr(time_diff, "days"):
+        days_diff = getattr(time_diff, "days", None)
+        if days_diff is None:
             return self.DEFAULT_DATE_FORMAT, self.DEFAULT_TIME_UNIT
-
-        days_diff = time_diff.days
 
         # Choose format based on the range
         if days_diff > 365 * 10:  # More than 10 years
