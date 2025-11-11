@@ -59,30 +59,47 @@ def module_exists_in_site_packages(module_name: str) -> bool:
         # Get all site-packages directories
         site_packages_dirs = site.getsitepackages()
         if hasattr(site, "getusersitepackages"):
-            site_packages_dirs.append(site.getusersitepackages())
+            user_site = site.getusersitepackages()
+            if user_site not in site_packages_dirs:
+                site_packages_dirs.append(user_site)
+
+        # Precompute targets for faster endswith
+        suffixes = (".egg-info", ".dist-info", ".egg")
+        # Allocate function locals
+        join = os.path.join
+        isdir = os.path.isdir
+        isfile = os.path.isfile
+        exists = os.path.exists
+        listdir = os.listdir
 
         for site_dir in site_packages_dirs:
-            if not os.path.exists(site_dir):
+            if not exists(site_dir):
                 continue
 
             # Check for package directory
-            package_dir = os.path.join(site_dir, module_name)
-            if os.path.isdir(package_dir):
+            package_dir = join(site_dir, module_name)
+            if isdir(package_dir):
                 return True
 
             # Check for .py file
-            py_file = os.path.join(site_dir, f"{module_name}.py")
-            if os.path.isfile(py_file):
+            py_file = join(site_dir, f"{module_name}.py")
+            if isfile(py_file):
                 return True
 
             # Check for .pth files or other package indicators
-            for entry in os.listdir(site_dir):
+            try:
+                entries = listdir(site_dir)
+            except OSError:
+                # Directory may not be accessible
+                continue
+
+            # membership/endswith chain optimized
+            for entry in entries:
+                # Performance: avoid split if not needed
+                if not entry.endswith(suffixes):
+                    continue
                 module = entry.split("-", 1)[0]
-                if module == module_name and (
-                    entry.endswith(".egg-info")
-                    or entry.endswith(".dist-info")
-                    or entry.endswith(".egg")
-                ):
+                if module == module_name:
                     return True
 
     except Exception:
