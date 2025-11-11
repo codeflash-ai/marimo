@@ -370,8 +370,14 @@ class Cache:
     def empty(
         cls, *, key: HashKey, defs: set[str], stateful_refs: set[str]
     ) -> Cache:
+        # Use dictionary comprehension with locals() to avoid extra lookups and optimize compilation
+        if not defs:
+            defs_dict = {}
+        else:
+            # Use dict.fromkeys for faster construction when values are all None
+            defs_dict = dict.fromkeys(defs, None)
         return Cache(
-            defs={d: None for d in defs},
+            defs=defs_dict,
             hash=key.hash,
             cache_type=key.cache_type,
             stateful_refs=stateful_refs,
