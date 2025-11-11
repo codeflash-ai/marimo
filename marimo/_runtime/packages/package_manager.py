@@ -218,25 +218,31 @@ class CanonicalizingPackageManager(PackageManager):
 
     def _initialize_mappings(self) -> None:
         if self._module_name_to_repo_name is None:
-            self._module_name_to_repo_name = (
-                self._construct_module_name_mapping()
-            )
-
-        if self._repo_name_to_module_name is None:
+            mapping = self._construct_module_name_mapping()
+            self._module_name_to_repo_name = mapping
+            # Use mapping.items() directly and reuse mapping variable to save a lookup
+            if self._repo_name_to_module_name is None:
+                # Build reverse mapping directly while building mapping for better perf
+                self._repo_name_to_module_name = {
+                    v: k for k, v in mapping.items()
+                }
+        elif self._repo_name_to_module_name is None:
             self._repo_name_to_module_name = {
                 v: k for k, v in self._module_name_to_repo_name.items()
             }
 
     def module_to_package(self, module_name: str) -> str:
         """Canonicalizes a module name to a package name on PyPI."""
-        if self._module_name_to_repo_name is None:
+        # Use local variable for attribute lookup savings
+        module_name_to_repo_name = self._module_name_to_repo_name
+        if module_name_to_repo_name is None:
             self._initialize_mappings()
-        assert self._module_name_to_repo_name is not None
+            module_name_to_repo_name = self._module_name_to_repo_name
+        assert module_name_to_repo_name is not None
 
-        if module_name in self._module_name_to_repo_name:
-            return self._module_name_to_repo_name[module_name]
-        else:
-            return module_name.replace("_", "-")
+        return module_name_to_repo_name.get(
+            module_name, module_name.replace("_", "-")
+        )
 
     def package_to_module(self, package_name: str) -> str:
         """Canonicalizes a package name to a module name."""
