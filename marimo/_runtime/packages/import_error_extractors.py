@@ -83,19 +83,21 @@ def extract_packages_from_pip_install_suggestion(
 def extract_packages_special_cases(message: str) -> list[str] | None:
     """Extract package names based on special case substrings in error messages."""
 
-    special_cases = {
+    # Convert special_cases to a tuple for faster looping (constant and short)
+    special_cases = (
         # pd.DataFrame.to_parquet()
-        "Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.": [
-            "pyarrow"
-        ],
-    }
+        (
+            "Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.",
+            ["pyarrow"],
+        ),
+    )
 
-    packages = []
-    for substring, package_names in special_cases.items():
+    # Avoid using a new list, return immediately on first match (behavior: single assignment ok)
+    for substring, package_names in special_cases:
         if substring in message:
-            packages.extend(package_names)
+            return package_names
 
-    return packages if packages else None
+    return None
 
 
 def try_extract_packages_from_import_error_message(
