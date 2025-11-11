@@ -27,7 +27,7 @@ class ConfigReader:
 
     @staticmethod
     def for_filename(filename: str) -> ConfigReader:
-        filepath = ROOT_DIR / filename
+        filepath = ROOT_DIR.joinpath(filename)
         return ConfigReader(filepath)
 
     def read_toml(self, cls: type[T], *, fallback: T) -> T:
