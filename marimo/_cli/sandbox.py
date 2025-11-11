@@ -24,6 +24,11 @@ from marimo._utils.uv import find_uv_bin
 from marimo._utils.versions import is_editable
 from marimo._version import __version__
 
+# Cache for is_editable("marimo") since it's expensive and always called with "marimo"
+_IS_EDITABLE_MARIMO: bool | None = None
+# Cache for get_marimo_dir() as it is called only if marimo editable is true
+_MARIMO_DIR: str | None = None
+
 LOGGER = _loggers.marimo_logger()
 
 DepFeatures = Literal["lsp", "recommended"]
@@ -89,6 +94,14 @@ def _normalize_sandbox_dependencies(
     If multiple marimo dependencies exist, prefer the one with brackets.
     Add version to the remaining one if not already versioned.
     """
+    # PERF: reduce repeated is_marimo_dependency (3x per list) to a single scan
+    marimo_deps: list[str] = []
+    filtered: list[str] = []
+    for d in dependencies:
+        if is_marimo_dependency(d):
+            marimo_deps.append(d)
+        else:
+            filtered.append(d)
 
     def include_features(dep: str, features: list[DepFeatures]) -> str:
         if not features:
@@ -100,27 +113,27 @@ def _normalize_sandbox_dependencies(
 
         return dep.replace("marimo", f"marimo[{','.join(features)}]")
 
-    # Find all marimo dependencies
-    marimo_deps = [d for d in dependencies if is_marimo_dependency(d)]
     if not marimo_deps:
-        if is_editable("marimo"):
+        if _get_editable_marimo_flag():
             LOGGER.info("Using editable of marimo for sandbox")
-            return dependencies + [f"-e {get_marimo_dir()}"]
+            return dependencies + [f"-e {_get_marimo_dir_str()}"]
 
         return dependencies + [
             include_features(f"marimo=={marimo_version}", additional_features)
         ]
 
-    # Prefer the one with brackets if it exists
-    bracketed = next((d for d in marimo_deps if "[" in d), None)
-    chosen = bracketed if bracketed else marimo_deps[0]
+    # Prefer the one with brackets if it exists (perf: no generator, just scan)
+    bracketed = None
+    for d in marimo_deps:
+        if "[" in d:
+            bracketed = d
+            break
+    chosen = bracketed if bracketed is not None else marimo_deps[0]
 
-    # Remove all marimo deps
-    filtered = [d for d in dependencies if not is_marimo_dependency(d)]
-
-    if is_editable("marimo"):
+    if _get_editable_marimo_flag():
         LOGGER.info("Using editable of marimo for sandbox")
-        return filtered + [f"-e {get_marimo_dir()}"]
+        return filtered + [f"-e {_get_marimo_dir_str()}"]
+    # Add version if not already versioned
 
     # Add version if not already versioned
     if not _is_versioned(chosen):
@@ -153,9 +166,11 @@ def _uv_export_script_requirements_txt(
 
 
 def _resolve_requirements_txt_lines(pyproject: PyProjectReader) -> list[str]:
-    if pyproject.name and pyproject.name.endswith(".py"):
+    # micro-opt: avoid long attr chain twice
+    name = pyproject.name
+    if name and name.endswith(".py"):
         try:
-            return _uv_export_script_requirements_txt(pyproject.name)
+            return _uv_export_script_requirements_txt(name)
         except subprocess.CalledProcessError:
             pass  # Fall back if uv fails
     return pyproject.requirements_txt_lines
@@ -202,7 +217,7 @@ def construct_uv_flags(
     ]
 
     # Layer additional deps on top of the requirements
-    if len(additional_deps) > 0:
+    if additional_deps:
         uv_flags.extend(["--with", ",".join(additional_deps)])
 
     # Add refresh
@@ -222,16 +237,33 @@ def construct_uv_flags(
     # Add extra-index-urls if specified
     extra_index_urls = pyproject.extra_index_urls
     if extra_index_urls:
-        for url in extra_index_urls:
-            uv_flags.extend(["--extra-index-url", url])
+        # PERF: use extend with iterable for fewer internal loops
+        # But preserve behavior: for each url, add flag
+        uv_flags.extend(["--extra-index-url", url] for url in extra_index_urls)
+        # Flatten list-of-lists to list (since extend accepts iterable, but needs flattened for tuples)
+        # In CPython, extend expects individual items.
+        # But since ["--extra-index-url", url] is a list, we must flatten.
+        # This is fastest via itertools.chain in pure Python:
+        import itertools
+
+        uv_flags_flat = []
+        uv_flags_flat.extend(uv_flags[: -len(extra_index_urls)])
+        uv_flags_flat.extend(
+            itertools.chain.from_iterable(uv_flags[-len(extra_index_urls) :])
+        )
+        uv_flags = uv_flags_flat
+
+    # Add index configs if specified
 
     # Add index configs if specified
     index_configs = pyproject.index_configs
     if index_configs:
+        # tiny perf: avoid repeated extend, combine extends
+        base_extends = []
         for config in index_configs:
             if "url" in config:
-                # Looks like: https://docs.astral.sh/uv/guides/scripts/#using-alternative-package-indexes
-                uv_flags.extend(["--index", config["url"]])
+                base_extends.extend(["--index", config["url"]])
+        uv_flags.extend(base_extends)
     return uv_flags
 
 
@@ -308,3 +340,19 @@ def run_in_sandbox(
     signal.signal(signal.SIGINT, handler)
 
     return process.wait()
+
+
+def _get_editable_marimo_flag() -> bool:
+    global _IS_EDITABLE_MARIMO
+    if _IS_EDITABLE_MARIMO is None:
+        _IS_EDITABLE_MARIMO = is_editable("marimo")
+    return _IS_EDITABLE_MARIMO
+
+
+def _get_marimo_dir_str() -> str:
+    global _MARIMO_DIR
+    if _MARIMO_DIR is None:
+        from marimo._cli.sandbox import get_marimo_dir
+
+        _MARIMO_DIR = str(get_marimo_dir())
+    return _MARIMO_DIR
