@@ -814,24 +814,21 @@ class WrapperChartBuilder(ChartBuilder):
 def get_chart_builder(
     column_type: DataType, should_limit_to_10_items: bool = False
 ) -> ChartBuilder:
+    # Use local variables to avoid repeated global lookups
+    Wrapper = WrapperChartBuilder
+    # Use set for fast membership checking in date/datetime/time branch
     if column_type == "number":
-        return WrapperChartBuilder(NumberChartBuilder())
+        return Wrapper(NumberChartBuilder())
     if column_type == "string":
-        return WrapperChartBuilder(
-            StringChartBuilder(should_limit_to_10_items)
-        )
-    if (
-        column_type == "date"
-        or column_type == "datetime"
-        or column_type == "time"
-    ):
-        return WrapperChartBuilder(DateChartBuilder())
+        return Wrapper(StringChartBuilder(should_limit_to_10_items))
+    if column_type in {"date", "datetime", "time"}:
+        return Wrapper(DateChartBuilder())
     if column_type == "boolean":
-        return WrapperChartBuilder(BooleanChartBuilder())
+        return Wrapper(BooleanChartBuilder())
     if column_type == "integer":
-        return WrapperChartBuilder(IntegerChartBuilder())
+        return Wrapper(IntegerChartBuilder())
     if column_type == "unknown":
-        return WrapperChartBuilder(UnknownChartBuilder())
+        return Wrapper(UnknownChartBuilder())
 
     assert_never(column_type)
 
