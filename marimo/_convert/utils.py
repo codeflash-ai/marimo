@@ -20,8 +20,7 @@ def markdown_to_marimo(source: str) -> str:
     return "\n".join(
         [
             "mo.md(",
-            # r-string: a backslash is just a backslash!
-            codegen.indent_text('r"""'),
+            '    r"""',
             source,
             '"""',
             ")",
