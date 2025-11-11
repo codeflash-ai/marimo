@@ -3,6 +3,21 @@ from __future__ import annotations
 
 import re
 
+_quoted_patterns = [
+    re.compile(r"`pip install\s+([^`]+)`", re.IGNORECASE),
+    re.compile(r'"pip install\s+([^"]+)"', re.IGNORECASE),
+    re.compile(r"'pip install\s+([^']+)'", re.IGNORECASE),
+]
+
+_individual_quoted_pattern = re.compile(
+    r'pip install\s+"([^"]+)"', re.IGNORECASE
+)
+
+_unquoted_pattern = re.compile(
+    r"pip install\s+([a-zA-Z0-9_.-]+(?:\[[a-zA-Z0-9_,.-]+\])?)",
+    re.IGNORECASE,
+)
+
 
 def extract_missing_module_from_cause_chain(
     error: ImportError,
@@ -36,14 +51,8 @@ def extract_packages_from_pip_install_suggestion(
     """Extract package names from pip install commands in error messages."""
 
     # First try to find quoted/backticked pip install commands (complete commands)
-    quoted_patterns = [
-        r"`pip install\s+([^`]+)`",  # backticks
-        r'"pip install\s+([^"]+)"',  # double quotes
-        r"'pip install\s+([^']+)'",  # single quotes
-    ]
-
-    for pattern in quoted_patterns:
-        match = re.search(pattern, message, re.IGNORECASE)
+    for pattern in _quoted_patterns:
+        match = pattern.search(message)
         if match:
             args_part = match.group(1)
             args = args_part.split()
@@ -62,17 +71,12 @@ def extract_packages_from_pip_install_suggestion(
                 return packages
 
     # Look for pip install with quoted individual packages
-    individual_quoted_pattern = r'pip install\s+"([^"]+)"'
-    match = re.search(individual_quoted_pattern, message, re.IGNORECASE)
+    match = _individual_quoted_pattern.search(message)
     if match:
         return [match.group(1)]
 
     # If no quoted command found, look for unquoted and take only first positional arg
-    unquoted_pattern = (
-        r"pip install\s+([a-zA-Z0-9_.-]+(?:\[[a-zA-Z0-9_,.-]+\])?)"
-    )
-
-    match = re.search(unquoted_pattern, message, re.IGNORECASE)
+    match = _unquoted_pattern.search(message)
 
     if match:
         return [match.group(1)]
