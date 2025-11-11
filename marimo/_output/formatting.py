@@ -148,9 +148,8 @@ def get_formatter(
         get_context()
     except ContextNotInitializedError:
         if FORMATTERS.is_empty():
-            from marimo._output.formatters.formatters import (
-                register_formatters,
-            )
+            from marimo._output.formatters.formatters import \
+                register_formatters
 
             # Install formatters when marimo is being used without
             # a kernel (eg, in a unit test or when run as a Python script)
