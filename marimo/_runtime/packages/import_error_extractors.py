@@ -13,13 +13,18 @@ def extract_missing_module_from_cause_chain(
     e.g., via `raise ImportError("helpful message") from err`
     """
     current: None | BaseException = error
+    # Cache ModuleNotFoundError and str for attribute check optimization
+    ModuleNotFoundErrorType = ModuleNotFoundError
     while current is not None:
-        if (
-            isinstance(current, ModuleNotFoundError)
-            and hasattr(current, "name")
-            and current.name
-        ):
-            return current.name
+        # Use type() identity check instead of isinstance() for performance,
+        # given that ModuleNotFoundError is unlikely to be subclassed and Python's
+        # type identity check is much cheaper than isinstance() when traversing deep cause chains.
+        if type(current) is ModuleNotFoundErrorType:
+            # Access .name directly and check truthiness;
+            # ModuleNotFoundError always has 'name' attribute.
+            name = current.name  # type: ignore[attr-defined]
+            if name:
+                return name
         current = current.__cause__
     return None
 
