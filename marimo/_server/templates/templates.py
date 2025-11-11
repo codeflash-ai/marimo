@@ -427,15 +427,14 @@ def inject_script(html: str, script: str) -> str:
 
 
 def _del_none_or_empty(d: Any) -> Any:
-    return {
-        key: (
-            _del_none_or_empty(cast(Any, value))
-            if isinstance(value, dict)
-            else value
-        )
-        for key, value in d.items()
-        if value is not None and value != []
-    }
+    result = {}
+    for key, value in d.items():
+        if value is not None and value != []:
+            if isinstance(value, dict):
+                result[key] = _del_none_or_empty(cast(Any, value))
+            else:
+                result[key] = value
+    return result
 
 
 def get_version() -> str:
