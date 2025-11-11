@@ -10,6 +10,12 @@ if TYPE_CHECKING:
 
 from marimo import _loggers
 
+_LINE_COL_RE = re.compile(r"Line (\d+), Col: (\d+)")
+
+_LINE_ONLY_RE = re.compile(r"LINE (\d+):")
+
+_SQLGLOT_RE = re.compile(r"line (\d+), col (\d+)", re.IGNORECASE)
+
 LOGGER = _loggers.marimo_logger()
 
 
@@ -103,7 +109,7 @@ def _extract_sql_position(
 ) -> tuple[Optional[int], Optional[int]]:
     """Extract line and column position from SQL exception message."""
     # SqlGlot format: "Line 1, Col: 15"
-    line_col_match = re.search(r"Line (\d+), Col: (\d+)", exception_msg)
+    line_col_match = _LINE_COL_RE.search(exception_msg)
     if line_col_match:
         return (
             int(line_col_match.group(1)) - 1,  # Convert to 0-based
@@ -111,7 +117,7 @@ def _extract_sql_position(
         )
 
     # DuckDB format: "LINE 4:" (line only)
-    line_only_match = re.search(r"LINE (\d+):", exception_msg)
+    line_only_match = _LINE_ONLY_RE.search(exception_msg)
     if line_only_match:
         return (
             int(line_only_match.group(1)) - 1,  # Convert to 0-based
@@ -119,9 +125,7 @@ def _extract_sql_position(
         )
 
     # SQLGlot format variations
-    sqlglot_match = re.search(
-        r"line (\d+), col (\d+)", exception_msg, re.IGNORECASE
-    )
+    sqlglot_match = _SQLGLOT_RE.search(exception_msg)
     if sqlglot_match:
         return (
             int(sqlglot_match.group(1)) - 1,
@@ -156,11 +160,19 @@ def create_sql_error_metadata(
 
     # Extract helpful DuckDB hints separately (including multiline hints)
     hint = None
-    lines = exception_msg.split("\n")
-    hint_lines = []
 
-    for line in lines[1:]:
-        hint_lines.append(line.strip())
+    # Directly split after the first \n to avoid split/join overhead
+    nl = exception_msg.find("\n")
+    if nl == -1:
+        hint_lines = []
+    else:
+        # Avoid repeated .split calls: slice original string
+        rest = exception_msg[nl + 1 :]
+        if rest:
+            # Split rest only if there IS content
+            hint_lines = [line.strip() for line in rest.split("\n")]
+        else:
+            hint_lines = []
 
     if hint_lines:
         hint = "\n".join(hint_lines)
