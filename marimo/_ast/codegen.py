@@ -6,7 +6,7 @@ import os
 import re
 import sys
 import textwrap
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypeAlias
 
 from marimo import _loggers
 from marimo._ast.app_config import _AppConfig
