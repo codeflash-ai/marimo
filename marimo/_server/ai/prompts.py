@@ -90,7 +90,8 @@ def _format_variables(
 
 def _rules(rules: list[str]) -> str:
     """Format a list of rules into a numbered string."""
-    return "\n".join(f"{i + 1}. {rule}" for i, rule in enumerate(rules))
+    items = [f"{i + 1}. {rule}" for i, rule in enumerate(rules)]
+    return "\n".join(items)
 
 
 def get_refactor_or_insert_notebook_cell_system_prompt(
