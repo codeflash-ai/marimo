@@ -7,6 +7,8 @@ from marimo._output.hypertext import Html
 from marimo._output.md import md
 from marimo._output.rich_help import mddoc
 
+_NO_DOC_MD: Html = md("No documentation available.")
+
 
 @mddoc
 def doc(obj: Any) -> Optional[Html]:
@@ -24,9 +26,7 @@ def doc(obj: Any) -> Optional[Html]:
     """
     if hasattr(obj, "_rich_help_"):
         msg = obj._rich_help_()
-        return (
-            md(msg) if msg is not None else md("No documentation available.")
-        )
+        return md(msg) if msg is not None else _NO_DOC_MD
     else:
         help(obj)
         return None

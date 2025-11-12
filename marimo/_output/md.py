@@ -14,13 +14,11 @@ import markdown.preprocessors  # type: ignore
 import pymdownx.emoji  # type: ignore
 
 from marimo._output.hypertext import Html
-from marimo._output.md_extensions.breakless_lists import (
-    BreaklessListsExtension,
-)
+from marimo._output.md_extensions.breakless_lists import \
+    BreaklessListsExtension
 from marimo._output.md_extensions.external_links import ExternalLinksExtension
-from marimo._output.md_extensions.flexible_indent import (
-    FlexibleIndentExtension,
-)
+from marimo._output.md_extensions.flexible_indent import \
+    FlexibleIndentExtension
 from marimo._output.md_extensions.iconify import IconifyExtension
 from marimo._output.rich_help import mddoc
 from marimo._utils.url import is_url
