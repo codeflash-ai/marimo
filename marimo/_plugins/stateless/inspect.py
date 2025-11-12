@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import inspect as inspect_
+from functools import lru_cache
 
 from marimo._output.builder import h
 from marimo._output.formatting import as_html
@@ -422,7 +423,7 @@ def _render_attribute_row(
 
 def _format_method(name: str, method: object, docs: bool) -> str:
     try:
-        sig = inspect_.signature(method)  # type: ignore
+        sig = _cached_signature(method)  # type: ignore
         if inspect_.iscoroutinefunction(method):
             display = f"async def {name}{sig}"
         else:
@@ -481,3 +482,8 @@ def _render_value_inline(value: object) -> str:
         html.escape(value_str),
         style="font-family: monospace; font-size: 0.75rem;",
     )
+
+
+@lru_cache(maxsize=128)
+def _cached_signature(method):
+    return inspect_.signature(method)
