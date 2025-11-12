@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import re
 
+_regex_cache: dict[str, tuple[re.Pattern[str] | None, bool]] = {}
+
 
 def compile_regex(query: str) -> tuple[re.Pattern[str] | None, bool]:
     """
     Returns compiled regex pattern and whether the query is a valid regex.
     """
+    if query in _regex_cache:
+        return _regex_cache[query]
+
     try:
-        return re.compile(query, re.IGNORECASE), True
+        result = re.compile(query, re.IGNORECASE), True
     except re.error:
-        return None, False
+        result = None, False
+
+    _regex_cache[query] = result
+    return result
 
 
 def is_fuzzy_match(
