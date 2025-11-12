@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ def import_files(filename: str) -> Traversable:
     return importlib_files(filename)
 
 
+@lru_cache(maxsize=1)
 def marimo_package_path() -> Path:
     return Path(str(import_files("marimo")))
 
