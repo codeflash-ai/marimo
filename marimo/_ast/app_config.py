@@ -62,7 +62,9 @@ class _AppConfig:
     def asdict(self) -> dict[str, Any]:
         # Used for experimental hooks which start with _
         return {
-            k: v for (k, v) in asdict(self).items() if not k.startswith("_")
+            k: getattr(self, k)
+            for k in self.__dataclass_fields__
+            if not k.startswith("_")
         }
 
     def update(self, updates: dict[str, Any]) -> "_AppConfig":
