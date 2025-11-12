@@ -8,6 +8,12 @@ from typing import Any, cast
 
 from marimo._config.settings import GLOBAL_SETTINGS
 
+_BOLD_PREFIX = "\033[1m"
+
+_MUTED_PREFIX = "\033[37;2m"
+
+_RESET = "\033[0m"
+
 
 # Check if we're on Windows and if ANSI colors are supported
 def _supports_color() -> bool:
@@ -40,7 +46,9 @@ _USE_COLOR = _supports_color()
 
 
 def bold(text: str) -> str:
-    return "\033[1m" + text + "\033[0m" if _USE_COLOR else text
+    if _USE_COLOR:
+        return f"{_BOLD_PREFIX}{text}{_RESET}"
+    return text
 
 
 def green(text: str, bold: bool = False) -> str:
@@ -87,7 +95,9 @@ def light_blue(text: str, bold: bool = False) -> str:
 
 def muted(text: str) -> str:
     # Use dark gray (37 is white, 2 is dim) which is more widely supported than 90
-    return "\033[37;2m" + text + "\033[0m" if _USE_COLOR else text
+    if _USE_COLOR:
+        return f"{_MUTED_PREFIX}{text}{_RESET}"
+    return text
 
 
 def _echo_or_print(*args: Any, **kwargs: Any) -> None:

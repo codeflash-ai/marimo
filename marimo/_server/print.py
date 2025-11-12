@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import sys
 from typing import Optional
+from urllib.parse import urlparse
 
 from marimo._cli.print import bold, green, muted
 from marimo._config.config import MarimoConfig, MCPConfig
@@ -100,26 +101,22 @@ def _get_network_url(url: str) -> str:
 
 
 def _colorized_url(url_string: str) -> str:
-    from urllib.parse import urlparse
-
     url = urlparse(url_string)
-    if url.query:
-        query = muted(f"?{url.query}")
-    else:
-        query = ""
+    query = muted(f"?{url.query}") if url.query else ""
+    result = f"{url.scheme}://{url.hostname}"
 
-    url_string = f"{url.scheme}://{url.hostname}"
+    # raw https and http urls do not have a port to parse
+    # Try to append port if present and valid
     # raw https and http urls do not have a port to parse
     try:
-        if url.port:
-            url_string += f":{url.port}"
+        port = url.port
+        if port:
+            result += f":{port}"
     except Exception:
         # If the port is not a number, don't include it
         pass
 
-    return bold(
-        f"{url_string}{url.path}{query}",
-    )
+    return bold(f"{result}{url.path}{query}")
 
 
 def _utf8(msg: str) -> str:
