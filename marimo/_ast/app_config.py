@@ -49,9 +49,16 @@ class _AppConfig:
         # internal)
         other_allowed = {"_filename"}
         config = _AppConfig()
-        for key in updates:
-            if hasattr(config, key):
-                config.__setattr__(key, updates[key])
+
+        # Prefetch attribute set for faster 'in' checks vs hasattr
+        # Only works because all fields are public
+        fields = _AppConfig.__dataclass_fields__
+        # Avoid attribute lookups on config in loop
+
+        # Avoids repeated updates[key] lookup; access once per iteration
+        for key, value in updates.items():
+            if key in fields:
+                setattr(config, key, value)
             elif key not in other_allowed:
                 if not silent:
                     LOGGER.warning(
@@ -86,14 +93,23 @@ def overloads_from_env() -> _AppConfig:
     """Return a dictionary of overloads from environment variables."""
     overloads: dict[str, Any] = {}
     prefix = "_MARIMO_APP_OVERLOAD_"
-    for key in os.environ:
-        if key.startswith(prefix):
-            new_key = key[len(prefix) :].lower()
-            value = os.environ[key]
-            if value.lower() in ("true", "false"):
-                overloads[new_key] = value.lower() == "true"
-            elif value.startswith("[") and value.endswith("]"):
-                overloads[new_key] = os.environ[key][1:-1].split(",")
-            else:
-                overloads[new_key] = os.environ[key]
+    lp = len(prefix)  # Avoid repeated len() calls
+
+    # os.environ is already a dict; iterate efficiently
+    get_env = os.environ.__getitem__
+    env_keys = [key for key in os.environ if key.startswith(prefix)]
+    # For each env key that matches prefix, process only them
+    for key in env_keys:
+        new_key = key[lp:].lower()
+        value = get_env(key)
+        lc_value = value.lower()
+        if lc_value == "true":
+            overloads[new_key] = True
+        elif lc_value == "false":
+            overloads[new_key] = False
+        elif value.startswith("[") and value.endswith("]"):
+            # Avoid a second get_env call
+            overloads[new_key] = value[1:-1].split(",")
+        else:
+            overloads[new_key] = value
     return _AppConfig.from_untrusted_dict(overloads, silent=True)
