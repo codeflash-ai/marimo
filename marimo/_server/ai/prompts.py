@@ -61,9 +61,14 @@ def _format_schema_info(tables: Optional[list[SchemaTable]]) -> str:
 
 
 def _format_plain_text(plain_text: str) -> str:
-    if not plain_text.strip():
+    # Optimize by avoiding .strip() if the string is already empty or only consists of whitespace.
+    # This minimizes unnecessary method calls and string scanning.
+    if not plain_text or plain_text.isspace():
         return ""
-    return f"If the prompt mentions @kind://name, use the following context to help you answer the question:\n\n{plain_text}"
+    return (
+        "If the prompt mentions @kind://name, use the following context to help you answer the question:\n\n"
+        + plain_text
+    )
 
 
 def _format_variables(
