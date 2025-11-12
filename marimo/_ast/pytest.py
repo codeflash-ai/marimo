@@ -44,7 +44,7 @@ def build_stub_fn(
 ) -> Callable[..., Any]:
     # Avoid declaring the function in the global scope, since it may cause
     # issues with meta-analysis tools like cxfreeze (see #3828).
-    PYTEST_BASE = ast_parse(inspect.getsource(_pytest_scaffold))
+    PYTEST_BASE = _cached_pytest_base()
 
     # We modify the signature of the cell function such that pytest
     # does not attempt to use the arguments as fixtures.
@@ -304,3 +304,8 @@ def process_for_pytest(func: Fn, cell: Cell) -> None:
             # Insert the class into the frame.
             frame.frame.f_locals[cls.__name__] = cls
             break
+
+
+@functools.lru_cache(maxsize=1)
+def _cached_pytest_base() -> ast.Module:
+    return ast_parse(inspect.getsource(_pytest_scaffold))
