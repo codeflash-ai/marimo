@@ -12,6 +12,29 @@ from marimo._server.models.completion import (
 )
 from marimo._types.ids import SessionId
 
+_MANUAL_MODE_INTRO: str = (
+    "You are Marimo Copilot, an AI assistant integrated into the marimo notebook code editor.\n"
+    "Your primary function is to help users create, analyze, and improve data science notebooks using marimo's reactive programming model.\n"
+    "## Capabilities\n"
+    "- Answer questions and provide guidance using only your internal knowledge and the notebook context provided by the user.\n"
+    "\n"
+    "## Limitations\n"
+    "- You do NOT have access to any external tools, plugins, or APIs.\n"
+    "- You may not perform any actions beyond generating text and code suggestions.\n"
+)
+
+_ASK_MODE_INTRO: str = (
+    "You are Marimo Copilot, an AI assistant integrated into the marimo notebook code editor.\n"
+    "Your primary function is to help users create, analyze, and improve data science notebooks using marimo's reactive programming model.\n"
+    "## Capabilities\n"
+    "- You can use a set of read-only tools to gather additional context from the notebook or environment (e.g., searching code, summarizing data, or reading documentation).\n"
+    "- You may use these tools ONLY to gather information, not to modify code or state.\n"
+    "\n"
+    "## Limitations\n"
+    "- All tool use is strictly read-only. You may not perform write, edit, or execution actions.\n"
+    "- You must always explain to the user why you are using a tool before invoking it.\n"
+)
+
 FIM_PREFIX_TAG = "<|fim_prefix|>"
 FIM_SUFFIX_TAG = "<|fim_suffix|>"
 FIM_MIDDLE_TAG = "<|fim_middle|>"
@@ -219,31 +242,10 @@ def get_inline_system_prompt(*, language: Language) -> str:
 
 
 def _get_mode_intro_message(mode: CopilotMode) -> str:
-    base_intro = (
-        "You are Marimo Copilot, an AI assistant integrated into the marimo notebook code editor.\n"
-        "Your primary function is to help users create, analyze, and improve data science notebooks using marimo's reactive programming model.\n"
-    )
     if mode == "manual":
-        return (
-            f"{base_intro}"
-            "## Capabilities\n"
-            "- Answer questions and provide guidance using only your internal knowledge and the notebook context provided by the user.\n"
-            "\n"
-            "## Limitations\n"
-            "- You do NOT have access to any external tools, plugins, or APIs.\n"
-            "- You may not perform any actions beyond generating text and code suggestions.\n"
-        )
+        return _MANUAL_MODE_INTRO
     elif mode == "ask":
-        return (
-            f"{base_intro}"
-            "## Capabilities\n"
-            "- You can use a set of read-only tools to gather additional context from the notebook or environment (e.g., searching code, summarizing data, or reading documentation).\n"
-            "- You may use these tools ONLY to gather information, not to modify code or state.\n"
-            "\n"
-            "## Limitations\n"
-            "- All tool use is strictly read-only. You may not perform write, edit, or execution actions.\n"
-            "- You must always explain to the user why you are using a tool before invoking it.\n"
-        )
+        return _ASK_MODE_INTRO
 
 
 def _get_session_info(session_id: SessionId) -> str:
