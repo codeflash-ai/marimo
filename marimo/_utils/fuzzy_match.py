@@ -31,6 +31,10 @@ def is_fuzzy_match(
         is_regex: Whether the query is a valid regex.
     """
     if is_regex and compiled_pattern:
-        return bool(compiled_pattern.search(name))
+        return compiled_pattern.search(name) is not None
     else:
-        return query.lower() in name.lower()
+        if query in name:
+            return True
+        lowered_query = query.lower()
+        lowered_name = name.lower()
+        return lowered_query in lowered_name
