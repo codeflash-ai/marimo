@@ -133,10 +133,18 @@ class AppState(AppStateBase):
         super().__init__(request.app.state)
         self.request = request
 
+        self._cached_session_id: Optional[SessionId] = None
+
     def get_current_session_id(self) -> Optional[SessionId]:
         """Get the current session."""
-        session_id = self.request.headers.get("Marimo-Session-Id")
-        return SessionId(session_id) if session_id is not None else None
+        # Cache lookup for headers for slight speedup
+        session_id = self._cached_session_id
+        if session_id is None:
+            hdrs = self.request.headers
+            val = hdrs.get("Marimo-Session-Id")
+            session_id = SessionId(val) if val is not None else None
+            self._cached_session_id = session_id
+        return session_id
 
     def require_current_session_id(self) -> SessionId:
         """Get the current session or raise an error."""
@@ -148,9 +156,14 @@ class AppState(AppStateBase):
     def get_current_session(self) -> Optional[Session]:
         """Get the current session."""
         session_id = self.get_current_session_id()
-        if session_id is None:
+        if not session_id:
             return None
-        return self.session_manager.get_session(session_id)
+        # Cache common attribute lookup
+        manager = getattr(self, "session_manager", None)
+        if manager is None:
+            # Defensive: if session_manager is not set, fall back
+            return None
+        return manager.get_session(session_id)
 
     def require_current_session(self) -> Session:
         """Get the current session or raise an error."""

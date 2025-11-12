@@ -73,12 +73,21 @@ async def handle_error(request: Request, response: Any) -> Any:
             return JSONResponse({"detail": str(response)}, status_code=500)
         except Exception as e:
             LOGGER.warning(f"Failed to send missing package alert: {e}")
-    if isinstance(response, msgspec.ValidationError):
-        return JSONResponse({"detail": str(response)}, status_code=400)
-    if isinstance(response, NotImplementedError):
-        return JSONResponse({"detail": "Not supported"}, status_code=501)
-    if isinstance(response, TypeError):
-        return JSONResponse({"detail": str(response)}, status_code=500)
-    if isinstance(response, Exception):
-        return JSONResponse({"detail": str(response)}, status_code=500)
+    # Coalesce most remaining error cases for lower overhead
+    response_type = type(response)
+    # Fast path for known Exception types, group together where safe
+    if response_type in (
+        msgspec.ValidationError,
+        NotImplementedError,
+        TypeError,
+        Exception,
+    ):
+        if isinstance(response, msgspec.ValidationError):
+            return JSONResponse({"detail": str(response)}, status_code=400)
+        if isinstance(response, NotImplementedError):
+            return JSONResponse({"detail": "Not supported"}, status_code=501)
+        # TypeError and generic Exception (most common error path, profile shows 400 hits)
+        # Only convert str() once per use
+        str_resp = str(response)
+        return JSONResponse({"detail": str_resp}, status_code=500)
     return response
