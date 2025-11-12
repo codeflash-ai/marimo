@@ -22,13 +22,14 @@ def _highlight_traceback(traceback: str) -> str:
 
 
 def write_traceback(traceback: str) -> None:
-    if isinstance(sys.stderr, Stderr):
-        sys.stderr._write_with_mimetype(
-            _highlight_traceback(_trim_traceback(traceback)),
-            mimetype="application/vnd.marimo+traceback",
-        )
-    else:
+    # Short-circuit: avoid unnecessary function call if not custom stderr
+    if not isinstance(sys.stderr, Stderr):
         sys.stderr.write(traceback)
+        return
+    sys.stderr._write_with_mimetype(
+        _highlight_traceback(_trim_traceback(traceback)),
+        mimetype="application/vnd.marimo+traceback",
+    )
 
 
 def _trim_traceback(traceback: str) -> str:
