@@ -8,28 +8,13 @@ import warnings
 from pathlib import Path
 from textwrap import dedent
 from tokenize import TokenInfo, tokenize
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Generic,
-    Optional,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union, cast
 
 from marimo._ast.names import DEFAULT_CELL_NAME, SETUP_CELL_NAME
-from marimo._schemas.serialization import (
-    AppInstantiation,
-    CellDef,
-    ClassCell,
-    FunctionCell,
-    Header,
-    NotebookSerialization,
-    SetupCell,
-    UnparsableCell,
-    Violation,
-)
+from marimo._schemas.serialization import (AppInstantiation, CellDef,
+                                           ClassCell, FunctionCell, Header,
+                                           NotebookSerialization, SetupCell,
+                                           UnparsableCell, Violation)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -886,15 +871,20 @@ def is_body_cell(node: Node) -> bool:
 
 
 def _is_setup_call(node: Node) -> bool:
-    if isinstance(node, ast.Attribute):
-        return (
-            isinstance(node.value, ast.Name)
-            and node.value.id == "app"
-            and node.attr == "setup"
-        )
-    elif isinstance(node, ast.Call):
-        return _is_setup_call(node.func)
-    return False
+    while True:
+        if isinstance(node, ast.Attribute):
+            value = node.value
+            if (
+                type(value) is ast.Name
+                and value.id == "app"
+                and node.attr == "setup"
+            ):
+                return True
+            return False
+        elif isinstance(node, ast.Call):
+            node = node.func
+            continue
+        return False
 
 
 def is_setup_cell(node: Node) -> bool:
