@@ -14,36 +14,27 @@ def memoize_last_value(func: Callable[..., T]) -> Callable[..., T]:
     object identity for positional arguments instead of equality
     which for functools requires the arguments to be hashable.
     """
-    last_input: tuple[tuple[Any, ...], frozenset[tuple[str, Any]]] = (
-        (),
-        frozenset(),
-    )
+    last_input_args: tuple[Any, ...] = ()
+    last_input_kwargs: frozenset[tuple[str, Any]] = frozenset()
     last_output: T = cast(T, sentinel)
 
     def wrapper(*args: Any, **kwargs: Any) -> T:
-        nonlocal last_input, last_output
-
-        current_input: tuple[tuple[Any, ...], frozenset[tuple[str, Any]]] = (
-            args,
-            frozenset(kwargs.items()),
-        )
+        nonlocal last_input_args, last_input_kwargs, last_output
 
         if (
             last_output is not sentinel
-            and len(current_input[0]) == len(last_input[0])
+            and len(args) == len(last_input_args)
             and all(
-                current_input[0][i] is last_input[0][i]
-                for i in range(len(current_input[0]))
-                if i < len(last_input[0])
+                arg is last_arg for arg, last_arg in zip(args, last_input_args)
             )
-            and current_input[1] == last_input[1]
+            and frozenset(kwargs.items()) == last_input_kwargs
         ):
             assert last_output is not sentinel
             return last_output
 
         result: T = func(*args, **kwargs)
-
-        last_input = current_input
+        last_input_args = args
+        last_input_kwargs = frozenset(kwargs.items())
         last_output = result
 
         return result
