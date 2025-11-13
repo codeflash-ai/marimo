@@ -39,8 +39,16 @@ def group_lookup(
     ids: Sequence[CellId_t], codes: Sequence[str]
 ) -> dict[str, list[tuple[int, CellId_t]]]:
     lookup: dict[str, list[tuple[int, CellId_t]]] = {}
-    for idx, (cell_id, code) in enumerate(zip(ids, codes)):
-        lookup.setdefault(code, []).append((idx, cell_id))
+    # Combine zip and enumerate efficiently by using zip with range
+    length = min(len(ids), len(codes))
+    # Avoid setdefault overhead by initializing lists only when needed
+    for idx in range(length):
+        code = codes[idx]
+        cell_id = ids[idx]
+        if code in lookup:
+            lookup[code].append((idx, cell_id))
+        else:
+            lookup[code] = [(idx, cell_id)]
     return lookup
 
 
