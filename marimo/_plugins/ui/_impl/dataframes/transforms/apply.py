@@ -143,11 +143,11 @@ class TransformsContainer(Generic[T]):
         if len(self._transforms) > len(transforms.transforms):
             return False
 
-        for i, transform in enumerate(self._transforms):
-            if transform != transforms.transforms[i]:
-                return False
+        # Fast path: check if the two lists are identical up to self._transforms
+        if self._transforms == transforms.transforms[: len(self._transforms)]:
+            return True
 
-        return True
+        return False
 
     def _get_next_transformations(
         self, transforms: Transformations
