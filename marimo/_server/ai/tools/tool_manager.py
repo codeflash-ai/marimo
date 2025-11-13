@@ -108,10 +108,14 @@ class ToolManager:
             return None
         else:
             # No source specified, check all sources
-            all_tools = self._get_all_tools()
-            for tool in all_tools:
-                if tool.name == name:
-                    return tool
+            tool = self._tools.get(name)
+            if tool is not None:
+                return tool
+
+            mcp_tools = self._list_mcp_tools()
+            for mcp_tool in mcp_tools:
+                if mcp_tool.name == name:
+                    return mcp_tool
             return None
 
     def _validate_backend_tool_arguments(
